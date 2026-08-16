@@ -4,6 +4,7 @@
  */
 
 import { findCards, type CollectionHit } from "./db";
+import { deckNeed } from "./deckNeed";
 import { nameKeys, primaryKey } from "./normalize";
 import { parseWantList } from "./parseList";
 import { identifierKey, priceForFinish, resolveCards, type CardIdentifier } from "./scryfall";
@@ -38,6 +39,10 @@ export interface SearchRow {
   /** The line as typed, so the user can spot their own typos. */
   query: string;
   quantityWanted: number;
+  /** Deck mode: copies the searcher already has. Zero otherwise. */
+  quantityOwned: number;
+  /** Copies still needed — equal to quantityWanted outside deck mode. */
+  quantityMissing: number;
   /** Scryfall's canonical name, when the card could be identified. */
   resolvedName: string | null;
   imageUri: string | null;
@@ -64,11 +69,28 @@ export interface SearchSummary {
   unrecognized: string[];
   /** Combined value of the cheapest sufficient copies, as a trade ballpark. */
   totalValueFound: number;
+  /**
+   * Deck mode only: entries dropped because the searcher already owns enough
+   * copies. Reported so a shrunken result set is obviously deliberate.
+   */
+  cardsAlreadyOwned: number;
+  /** Deck mode only: total copies still needed across every row. */
+  copiesNeeded: number;
 }
 
 export interface SearchResponse {
   rows: SearchRow[];
   summary: SearchSummary;
+  /** Set when the list was checked against someone's own collection. */
+  deckOwnerId: string | null;
+}
+
+export interface SearchOptions {
+  /**
+   * Whose collection to subtract first. Turns "who has these cards?" into
+   * "what am I missing from this deck, and who has it?".
+   */
+  deckOwnerId?: string;
 }
 
 /** Build the best identifier available for a collection row. */
@@ -80,17 +102,24 @@ function identifierForHit(hit: CollectionHit): CardIdentifier {
   return { kind: "name", name: hit.name };
 }
 
-export async function runSearch(listText: string): Promise<SearchResponse> {
+export async function runSearch(
+  listText: string,
+  options: SearchOptions = {},
+): Promise<SearchResponse> {
+  const deckOwnerId = options.deckOwnerId ?? null;
   const wanted = parseWantList(listText);
   if (wanted.length === 0) {
     return {
       rows: [],
+      deckOwnerId,
       summary: {
         cardsSearched: 0,
         cardsFound: 0,
         cardsMissing: 0,
         unrecognized: [],
         totalValueFound: 0,
+        cardsAlreadyOwned: 0,
+        copiesNeeded: 0,
       },
     };
   }
@@ -138,15 +167,32 @@ export async function runSearch(listText: string): Promise<SearchResponse> {
   const rows: SearchRow[] = [];
   const unrecognized: string[] = [];
   let totalValueFound = 0;
+  let cardsAlreadyOwned = 0;
+  let copiesNeeded = 0;
 
   wanted.forEach((want, index) => {
     const reference = cards.get(identifierKey({ kind: "name", name: want.name })) ?? null;
-    if (!reference) unrecognized.push(want.name);
 
     const bucket = hitsByWanted.get(index) ?? new Map<number, CollectionHit>();
     const byOwner = new Map<string, OwnerMatch>();
 
+    // In deck mode the searcher's own copies are subtracted from the ask
+    // rather than listed as somewhere to get the card.
+    const { quantityOwned, quantityMissing, satisfied } = deckNeed(
+      want.quantity,
+      deckOwnerId,
+      [...bucket.values()],
+    );
+
+    if (satisfied) {
+      cardsAlreadyOwned++;
+      return;
+    }
+    copiesNeeded += quantityMissing;
+    if (!reference) unrecognized.push(want.name);
+
     for (const hit of bucket.values()) {
+      if (deckOwnerId && hit.ownerId === deckOwnerId) continue;
       const printing = cards.get(identifierKey(identifierForHit(hit))) ?? null;
       const { price, approximate } = printing
         ? priceForFinish(printing, hit.finish)
@@ -195,18 +241,21 @@ export async function runSearch(listText: string): Promise<SearchResponse> {
     const totalAvailable = owners.reduce((sum, owner) => sum + owner.totalQuantity, 0);
     const totalTradeable = owners.reduce((sum, owner) => sum + owner.totalTradeable, 0);
 
-    // Ballpark trade value: the cheapest copies that would satisfy the ask.
+    // Ballpark trade value: the cheapest copies that would cover what is
+    // still needed (the whole ask, outside deck mode).
     const copyPrices = owners
       .flatMap((owner) => owner.copies.flatMap((copy) => Array<number | null>(copy.quantity).fill(copy.price)))
       .filter((price): price is number => price !== null)
       .sort((a, b) => a - b);
     totalValueFound += copyPrices
-      .slice(0, want.quantity)
+      .slice(0, quantityMissing)
       .reduce((sum, price) => sum + price, 0);
 
     rows.push({
       query: want.name,
       quantityWanted: want.quantity,
+      quantityOwned,
+      quantityMissing,
       resolvedName: reference?.name ?? null,
       imageUri: reference?.imageUri ?? null,
       scryfallUri: reference?.scryfallUri ?? null,
@@ -230,12 +279,15 @@ export async function runSearch(listText: string): Promise<SearchResponse> {
 
   return {
     rows,
+    deckOwnerId,
     summary: {
       cardsSearched: rows.length,
       cardsFound: rows.filter((row) => row.totalAvailable > 0).length,
       cardsMissing: rows.filter((row) => row.totalAvailable === 0).length,
       unrecognized,
       totalValueFound,
+      cardsAlreadyOwned,
+      copiesNeeded,
     },
   };
 }

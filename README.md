@@ -79,6 +79,23 @@ are all handled. Names are matched loosely — accents, apostrophes and punctuat
 matter (`aangs iceberg` finds `Aang's Iceberg`), and searching one face of a split or
 double-faced card finds the full printing.
 
+## Building a deck: what am I missing?
+
+Paste a decklist, then pick yourself under **Subtract a collection first**. Cards you
+already have enough of drop out, and what remains is the gap list with who can fill it.
+
+```
+ALREADY OWN 1   STILL NEED 3   COPIES TO FIND 6   NOBODY HAS 1   COST TO FILL GAPS $16.81
+
+Lightning Bolt    need 1                    $0.80 ref     ·        ·
+Aang and Katara   need 2                    $6.68         2        ·
+Aang, Air Nomad   need 3 of 4 — own 1       $1.15         ·        4
+```
+
+Partial holdings are handled: four-of a card you own one of shows as needing three, and
+the value shown is the cost of the copies you still need rather than the whole playset.
+Your own column is dropped from the table, since those copies have already been counted.
+
 ## Trades
 
 The **Find cards** tab answers "who has this?". The **Trades** tab answers the question a
@@ -135,6 +152,7 @@ Layout:
 | `src/lib/parseList.ts` | Want-list parsing |
 | `src/lib/scryfall.ts` | Batched, throttled Scryfall lookups and pricing |
 | `src/lib/search.ts` | The who-has-what query |
+| `src/lib/deckNeed.ts` | Deck-mode subtraction rules (pure) |
 | `src/lib/tradeMath.ts` | Trade quantity and value rules (pure) |
 | `src/lib/trades.ts` | Two-way trade matching between people |
 | `src/lib/db.ts` | libSQL storage |

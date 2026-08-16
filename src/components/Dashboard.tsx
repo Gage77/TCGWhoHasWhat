@@ -31,6 +31,8 @@ export function Dashboard({
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("search");
   const [list, setList] = useState("");
+  /** When set, the list is treated as a decklist and this person's collection is subtracted. */
+  const [deckOwnerId, setDeckOwnerId] = useState("");
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [tradeableOnly, setTradeableOnly] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -47,7 +49,7 @@ export function Dashboard({
       const response = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ list }),
+        body: JSON.stringify({ list, deckOwnerId: deckOwnerId || undefined }),
       });
       const data = await response.json();
       if (!response.ok) setError(data.error ?? "Search failed.");
@@ -128,6 +130,31 @@ export function Dashboard({
               work.
             </p>
 
+            <div className="mt-4">
+              <label
+                htmlFor="deckowner"
+                className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
+              >
+                Subtract a collection first
+              </label>
+              <select
+                id="deckowner"
+                value={deckOwnerId}
+                onChange={(event) => setDeckOwnerId(event.target.value)}
+                className="mt-1 block rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
+              >
+                <option value="">Don&apos;t subtract — show every card</option>
+                {owners.map((owner) => (
+                  <option key={owner.id} value={owner.id}>
+                    I am {owner.name} — show only what I&apos;m missing
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+                Paste a decklist and pick yourself to see just the gaps, and who can fill them.
+              </p>
+            </div>
+
             <div className="mt-4 flex flex-wrap items-center gap-4">
               <button
                 type="submit"
@@ -159,19 +186,52 @@ export function Dashboard({
 
           {summary && (
             <div className="flex flex-wrap gap-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <Stat label="Searched" value={summary.cardsSearched.toString()} />
-              <Stat
-                label="Someone has"
-                value={summary.cardsFound.toString()}
-                tone="text-emerald-600 dark:text-emerald-400"
-              />
-              <Stat
-                label="Nobody has"
-                value={summary.cardsMissing.toString()}
-                tone={summary.cardsMissing > 0 ? "text-amber-600 dark:text-amber-400" : undefined}
-              />
-              <Stat label="Value of copies found" value={money(summary.totalValueFound)} />
+              {results?.deckOwnerId ? (
+                <>
+                  <Stat
+                    label="Already own"
+                    value={summary.cardsAlreadyOwned.toString()}
+                    tone="text-emerald-600 dark:text-emerald-400"
+                  />
+                  <Stat label="Still need" value={summary.cardsSearched.toString()} />
+                  <Stat
+                    label="Copies to find"
+                    value={summary.copiesNeeded.toString()}
+                  />
+                  <Stat
+                    label="Nobody has"
+                    value={summary.cardsMissing.toString()}
+                    tone={
+                      summary.cardsMissing > 0 ? "text-amber-600 dark:text-amber-400" : undefined
+                    }
+                  />
+                  <Stat label="Cost to fill gaps" value={money(summary.totalValueFound)} />
+                </>
+              ) : (
+                <>
+                  <Stat label="Searched" value={summary.cardsSearched.toString()} />
+                  <Stat
+                    label="Someone has"
+                    value={summary.cardsFound.toString()}
+                    tone="text-emerald-600 dark:text-emerald-400"
+                  />
+                  <Stat
+                    label="Nobody has"
+                    value={summary.cardsMissing.toString()}
+                    tone={
+                      summary.cardsMissing > 0 ? "text-amber-600 dark:text-amber-400" : undefined
+                    }
+                  />
+                  <Stat label="Value of copies found" value={money(summary.totalValueFound)} />
+                </>
+              )}
             </div>
+          )}
+
+          {results?.deckOwnerId && results.rows.length === 0 && (
+            <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+              You already own every card on that list.
+            </p>
           )}
 
           {summary && summary.unrecognized.length > 0 && (
@@ -181,7 +241,14 @@ export function Dashboard({
           )}
 
           {results && results.rows.length > 0 && (
-            <ResultsTable rows={results.rows} owners={owners} tradeableOnly={tradeableOnly} />
+            <ResultsTable
+              rows={results.rows}
+              // Your own copies were subtracted, so your column would read
+              // as empty for every remaining card.
+              owners={owners.filter((owner) => owner.id !== results.deckOwnerId)}
+              tradeableOnly={tradeableOnly}
+              deckMode={Boolean(results.deckOwnerId)}
+            />
           )}
           </div>
         </section>

@@ -11,6 +11,8 @@ interface Props {
   owners: Owner[];
   /** Count only copies the owner flagged as available to trade. */
   tradeableOnly: boolean;
+  /** The list was checked against the searcher's own collection. */
+  deckMode?: boolean;
 }
 
 const FINISH_LABEL: Record<string, string> = {
@@ -46,7 +48,7 @@ function PriceCell({ row }: { row: SearchRow }) {
   );
 }
 
-export function ResultsTable({ rows, owners, tradeableOnly }: Props) {
+export function ResultsTable({ rows, owners, tradeableOnly, deckMode = false }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function toggle(key: string) {
@@ -92,10 +94,17 @@ export function ResultsTable({ rows, owners, tradeableOnly }: Props) {
                     )}
                     <div className={found ? "" : "pl-4"}>
                       <span className="font-medium">{row.resolvedName ?? row.query}</span>
-                      {row.quantityWanted > 1 && (
+                      {deckMode ? (
                         <span className="ml-2 text-xs text-zinc-500">
-                          want {row.quantityWanted}
+                          need {row.quantityMissing}
+                          {row.quantityOwned > 0 && ` of ${row.quantityWanted} — own ${row.quantityOwned}`}
                         </span>
+                      ) : (
+                        row.quantityWanted > 1 && (
+                          <span className="ml-2 text-xs text-zinc-500">
+                            want {row.quantityWanted}
+                          </span>
+                        )
                       )}
                       {!row.resolvedName && (
                         <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">

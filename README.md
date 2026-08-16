@@ -79,6 +79,30 @@ are all handled. Names are matched loosely — accents, apostrophes and punctuat
 matter (`aangs iceberg` finds `Aang's Iceberg`), and searching one face of a split or
 double-faced card finds the full printing.
 
+## Trades
+
+The **Find cards** tab answers "who has this?". The **Trades** tab answers the question a
+trade actually turns on: between you and each other person, what do they hold that you
+want, and what do you hold that they want?
+
+1. Pick who you are.
+2. Save a want list for yourself (paste it, same format as a search).
+3. Hit **Find trades**.
+
+Each person you could trade with gets a card showing both directions side by side, with
+each pile's value and the difference between them — "you'd receive $20.57 more" — so a
+trade can be evened up before anyone drives anywhere. Matches only appear once *both*
+people have saved want lists, since the matching runs off them.
+
+Quantities are respected in both directions: wanting 4 of a card someone has 2 of matches
+2. Value counts the cheapest copies that would actually change hands, on the assumption
+that whoever hands a card over parts with their least valuable printing — which also keeps
+the balance figure conservative. Cards with no known price count as $0 rather than
+blocking the match, so a pile's value is a floor, not a guarantee.
+
+The **only copies marked for trade** toggle applies here too, so cards someone owns but
+isn't parting with stay out of the maths.
+
 ## Prices
 
 Prices come from [Scryfall](https://scryfall.com), which aggregates TCGplayer (USD) and
@@ -111,6 +135,8 @@ Layout:
 | `src/lib/parseList.ts` | Want-list parsing |
 | `src/lib/scryfall.ts` | Batched, throttled Scryfall lookups and pricing |
 | `src/lib/search.ts` | The who-has-what query |
+| `src/lib/tradeMath.ts` | Trade quantity and value rules (pure) |
+| `src/lib/trades.ts` | Two-way trade matching between people |
 | `src/lib/db.ts` | libSQL storage |
 
 Collections are stored in `data/collections.db` (gitignored).

@@ -1,10 +1,10 @@
 import { Dashboard } from "@/components/Dashboard";
-import { listOwners } from "@/lib/db";
+import { listOwners, wantCounts } from "@/lib/db";
 
-// Collections change on upload, so this page is always rendered fresh.
+// Collections and want lists change on upload, so this page is always fresh.
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const owners = await listOwners();
-  return <Dashboard owners={owners} />;
+  const [owners, counts] = await Promise.all([listOwners(), wantCounts()]);
+  return <Dashboard owners={owners} wantCounts={Object.fromEntries(counts)} />;
 }

@@ -45,7 +45,22 @@ const SCHEMA = [
     card_json  TEXT,
     fetched_at INTEGER NOT NULL
   )`,
+  // A saved want list per person, so trades can be matched in both
+  // directions without anyone re-pasting a list.
+  `CREATE TABLE IF NOT EXISTS want_cards (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL REFERENCES owners(id) ON DELETE CASCADE,
+    name     TEXT NOT NULL,
+    quantity INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS want_keys (
+    want_id  INTEGER NOT NULL REFERENCES want_cards(id) ON DELETE CASCADE,
+    name_key TEXT NOT NULL
+  )`,
   `CREATE INDEX IF NOT EXISTS idx_card_keys_key ON card_keys(name_key)`,
+  `CREATE INDEX IF NOT EXISTS idx_want_keys_key ON want_keys(name_key)`,
+  `CREATE INDEX IF NOT EXISTS idx_want_keys_want ON want_keys(want_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_wants_owner ON want_cards(owner_id)`,
   `CREATE INDEX IF NOT EXISTS idx_card_keys_card ON card_keys(card_id)`,
   `CREATE INDEX IF NOT EXISTS idx_cards_owner ON collection_cards(owner_id)`,
 ];
@@ -215,6 +230,12 @@ export async function deleteOwner(ownerId: string): Promise<void> {
     args: [ownerId],
   });
   await db.execute({ sql: "DELETE FROM collection_cards WHERE owner_id = ?", args: [ownerId] });
+  await db.execute({
+    sql: `DELETE FROM want_keys WHERE want_id IN
+            (SELECT id FROM want_cards WHERE owner_id = ?)`,
+    args: [ownerId],
+  });
+  await db.execute({ sql: "DELETE FROM want_cards WHERE owner_id = ?", args: [ownerId] });
   await db.execute({ sql: "DELETE FROM owners WHERE id = ?", args: [ownerId] });
 }
 
@@ -275,6 +296,134 @@ export async function findCards(keys: string[]): Promise<CollectionHit[]> {
   }
 
   return hits;
+}
+
+export interface WantCard {
+  id: number;
+  name: string;
+  quantity: number;
+}
+
+export async function listWants(ownerId: string): Promise<WantCard[]> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: "SELECT id, name, quantity FROM want_cards WHERE owner_id = ? ORDER BY name COLLATE NOCASE",
+    args: [ownerId],
+  });
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    name: String(row.name),
+    quantity: Number(row.quantity),
+  }));
+}
+
+/** Replace someone's whole want list; an empty list simply clears it. */
+export async function replaceWantList(
+  ownerId: string,
+  wants: Array<{ name: string; quantity: number }>,
+): Promise<WantCard[]> {
+  const db = await getDb();
+
+  await db.execute({
+    sql: `DELETE FROM want_keys WHERE want_id IN
+            (SELECT id FROM want_cards WHERE owner_id = ?)`,
+    args: [ownerId],
+  });
+  await db.execute({ sql: "DELETE FROM want_cards WHERE owner_id = ?", args: [ownerId] });
+
+  const CHUNK = 200;
+  for (let i = 0; i < wants.length; i += CHUNK) {
+    const chunk = wants.slice(i, i + CHUNK);
+    const inserted = await db.execute({
+      sql: `INSERT INTO want_cards (owner_id, name, quantity)
+            VALUES ${chunk.map(() => "(?, ?, ?)").join(", ")}
+            RETURNING id, name`,
+      args: chunk.flatMap((want) => [ownerId, want.name, want.quantity]),
+    });
+
+    const keyRows = inserted.rows.flatMap((row) =>
+      nameKeys(String(row.name)).map((key) => ({ wantId: Number(row.id), key })),
+    );
+    if (keyRows.length > 0) {
+      await db.execute({
+        sql: `INSERT INTO want_keys (want_id, name_key) VALUES ${keyRows
+          .map(() => "(?, ?)")
+          .join(", ")}`,
+        args: keyRows.flatMap((row) => [row.wantId, row.key]),
+      });
+    }
+  }
+
+  return listWants(ownerId);
+}
+
+/** How many cards each person has on their want list. */
+export async function wantCounts(): Promise<Map<string, number>> {
+  const db = await getDb();
+  const result = await db.execute(
+    "SELECT owner_id, COUNT(*) AS n FROM want_cards GROUP BY owner_id",
+  );
+  return new Map(result.rows.map((row) => [String(row.owner_id), Number(row.n)]));
+}
+
+export interface WantMatch {
+  wantId: number;
+  wanterId: string;
+  wantName: string;
+  wantQuantity: number;
+  holderId: string;
+  holderName: string;
+  cardId: number;
+  cardName: string;
+  setCode: string | null;
+  collectorNumber: string | null;
+  quantity: number;
+  tradelistQuantity: number;
+  finish: string;
+  condition: string | null;
+  scryfallId: string | null;
+}
+
+/**
+ * Every case of one person wanting a card another person owns.
+ *
+ * Done as a single join rather than per-person queries: a playgroup's want
+ * lists and collections are both already indexed by normalized name key, so
+ * the database can pair them up directly.
+ */
+export async function findWantMatches(): Promise<WantMatch[]> {
+  const db = await getDb();
+  const result = await db.execute(
+    `SELECT DISTINCT
+       w.id AS want_id, w.owner_id AS wanter_id, w.name AS want_name, w.quantity AS want_quantity,
+       c.id AS card_id, c.owner_id AS holder_id, o.name AS holder_name,
+       c.name AS card_name, c.set_code, c.collector_number, c.quantity,
+       c.tradelist_quantity, c.finish, c.condition, c.scryfall_id
+     FROM want_keys wk
+     JOIN want_cards w ON w.id = wk.want_id
+     JOIN card_keys ck ON ck.name_key = wk.name_key
+     JOIN collection_cards c ON c.id = ck.card_id
+     JOIN owners o ON o.id = c.owner_id
+     WHERE c.owner_id != w.owner_id`,
+  );
+
+  return result.rows.map((row) => ({
+    wantId: Number(row.want_id),
+    wanterId: String(row.wanter_id),
+    wantName: String(row.want_name),
+    wantQuantity: Number(row.want_quantity),
+    holderId: String(row.holder_id),
+    holderName: String(row.holder_name),
+    cardId: Number(row.card_id),
+    cardName: String(row.card_name),
+    setCode: row.set_code ? String(row.set_code) : null,
+    collectorNumber: row.collector_number ? String(row.collector_number) : null,
+    quantity: Number(row.quantity),
+    tradelistQuantity: Number(row.tradelist_quantity),
+    finish: String(row.finish),
+    condition: row.condition ? String(row.condition) : null,
+    scryfallId: row.scryfall_id ? String(row.scryfall_id) : null,
+  }));
 }
 
 export async function readCache(keys: string[], maxAgeMs: number) {

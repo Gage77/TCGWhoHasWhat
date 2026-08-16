@@ -5,9 +5,12 @@ import { useState } from "react";
 
 import { CollectionsPanel } from "@/components/CollectionsPanel";
 import { ResultsTable } from "@/components/ResultsTable";
+import { TradesPanel } from "@/components/TradesPanel";
 import type { Owner } from "@/lib/db";
 import { money } from "@/lib/format";
 import type { SearchResponse } from "@/lib/search";
+
+type Tab = "search" | "trades";
 
 const PLACEHOLDER = `Sol Ring
 4x Lightning Bolt
@@ -18,8 +21,15 @@ Smothering Tithe`;
  * Owners are rendered from server props rather than client state, so an
  * upload just refreshes the route and the list comes back updated.
  */
-export function Dashboard({ owners }: { owners: Owner[] }) {
+export function Dashboard({
+  owners,
+  wantCounts,
+}: {
+  owners: Owner[];
+  wantCounts: Record<string, number>;
+}) {
   const router = useRouter();
+  const [tab, setTab] = useState<Tab>("search");
   const [list, setList] = useState("");
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [tradeableOnly, setTradeableOnly] = useState(false);
@@ -64,6 +74,36 @@ export function Dashboard({ owners }: { owners: Owner[] }) {
         <CollectionsPanel owners={owners} onChanged={() => router.refresh()} />
 
         <section className="space-y-6">
+          <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
+            {(
+              [
+                ["search", "Find cards"],
+                ["trades", "Trades"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setTab(value)}
+                className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
+                  tab === value
+                    ? "bg-white shadow-sm dark:bg-zinc-950"
+                    : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {tab === "trades" && (
+            <TradesPanel
+              owners={owners}
+              wantCounts={wantCounts}
+              onWantsChanged={() => router.refresh()}
+            />
+          )}
+
+          <div className={tab === "search" ? "space-y-6" : "hidden"}>
           <form
             onSubmit={search}
             className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
@@ -143,6 +183,7 @@ export function Dashboard({ owners }: { owners: Owner[] }) {
           {results && results.rows.length > 0 && (
             <ResultsTable rows={results.rows} owners={owners} tradeableOnly={tradeableOnly} />
           )}
+          </div>
         </section>
       </div>
     </main>

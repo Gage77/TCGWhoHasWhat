@@ -21,14 +21,9 @@ as `alex`, `jordan` and `sam`.
 
 ## Getting collections in
 
-Collections are uploaded as **CSV exports**, not links.
+Two ways: a **CSV export** from any tracker, or a **link** to a public Deckbox collection.
 
-Moxfield has no public collection API — collections are private by default and their
-endpoints sit behind Cloudflare, which returns 403 to anything that isn't a browser.
-Archidekt's collection API requires authentication. Working around either would be
-fragile and against their terms, so the app takes the export file instead. The export
-is actually *better* data: it carries exact set codes and collector numbers, so each
-copy gets priced as the specific printing it is rather than as a generic card name.
+### CSV upload (works with every tracker)
 
 **Exporting from Moxfield:** open your collection → the **⋯ / Export** button above the
 card list → choose CSV → download.
@@ -38,6 +33,33 @@ name rather than position, so any export with a card name column will load; set 
 collector number, quantity, tradelist count, foil and condition are picked up when present.
 
 Re-uploading under the same name replaces that person's collection.
+
+### Deckbox link (self-updating)
+
+Paste a public Deckbox inventory URL — `https://deckbox.org/sets/123456` — and the app
+reads the collection directly. Linked collections get a **Refresh** button, so they can be
+re-pulled later without anyone exporting anything.
+
+- The collection must be public.
+- Add `?s=t` to import only the cards marked for trade.
+- The owner's name is taken from Deckbox if you leave the name field blank.
+- Deckbox labels printings with set *names*, which are mapped to Scryfall set codes so
+  copies are still priced as exact printings (~99% of rows resolve in practice).
+
+Deckbox paginates at a fixed 30 rows and ignores page-size parameters, so a large
+collection is genuinely hundreds of requests — a 19,853-card collection takes about 26
+seconds. Requests run four at a time to stay a polite client, and only `deckbox.org` URLs
+are accepted since the app fetches them server-side.
+
+### Why other sites are CSV-only
+
+Deckbox is the only major collection site that serves collections publicly, and its
+robots.txt permits crawling. Moxfield has no public collection API — collections are
+private by default and its endpoints, including the login endpoint, sit behind Cloudflare
+and return 403 to anything that isn't a browser. Archidekt's collection API exchanges an
+account password for a long-lived token, which is not a reasonable thing to ask a
+playgroup for. CSV export needs no credentials at all and carries exact set codes, so it
+stays the primary path.
 
 ## What the want list accepts
 
@@ -83,6 +105,8 @@ Layout:
 | Path | Purpose |
 | --- | --- |
 | `src/lib/csv.ts` | Collection export parsing, header alias matching |
+| `src/lib/deckbox-parse.ts` | Deckbox HTML parsing (pure, no network) |
+| `src/lib/deckbox.ts` | Deckbox fetching, pagination, set-code resolution |
 | `src/lib/normalize.ts` | Card-name folding and split/DFC face keys |
 | `src/lib/parseList.ts` | Want-list parsing |
 | `src/lib/scryfall.ts` | Batched, throttled Scryfall lookups and pricing |

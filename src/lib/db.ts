@@ -70,6 +70,15 @@ async function initClient(): Promise<Client> {
   for (const statement of SCHEMA) {
     await client.execute(statement);
   }
+
+  // Added after the initial release; databases created before it need the
+  // column back-filled. SQLite has no "ADD COLUMN IF NOT EXISTS".
+  try {
+    await client.execute("ALTER TABLE owners ADD COLUMN source_url TEXT");
+  } catch {
+    // Already present.
+  }
+
   await client.execute("PRAGMA foreign_keys = ON");
 
   return client;
@@ -88,12 +97,15 @@ export interface Owner {
   cardCount: number;
   uniqueCards: number;
   updatedAt: string;
+  /** Set for link imports, so the collection can be re-fetched later. */
+  sourceUrl: string | null;
 }
 
 export async function listOwners(): Promise<Owner[]> {
   const db = await getDb();
   const result = await db.execute(
-    "SELECT id, name, card_count, unique_cards, updated_at FROM owners ORDER BY name COLLATE NOCASE",
+    `SELECT id, name, card_count, unique_cards, updated_at, source_url
+     FROM owners ORDER BY name COLLATE NOCASE`,
   );
   return result.rows.map((row) => ({
     id: String(row.id),
@@ -101,7 +113,13 @@ export async function listOwners(): Promise<Owner[]> {
     cardCount: Number(row.card_count),
     uniqueCards: Number(row.unique_cards),
     updatedAt: String(row.updated_at),
+    sourceUrl: row.source_url ? String(row.source_url) : null,
   }));
+}
+
+export async function getOwner(ownerId: string): Promise<Owner | null> {
+  const owners = await listOwners();
+  return owners.find((owner) => owner.id === ownerId) ?? null;
 }
 
 /**
@@ -112,6 +130,7 @@ export async function listOwners(): Promise<Owner[]> {
 export async function replaceCollection(
   ownerName: string,
   cards: CollectionCard[],
+  sourceUrl: string | null = null,
 ): Promise<Owner> {
   const db = await getDb();
   const name = ownerName.trim();
@@ -127,14 +146,15 @@ export async function replaceCollection(
   const updatedAt = new Date().toISOString();
 
   await db.execute({
-    sql: `INSERT INTO owners (id, name, card_count, unique_cards, updated_at)
-          VALUES (?, ?, ?, ?, ?)
+    sql: `INSERT INTO owners (id, name, card_count, unique_cards, updated_at, source_url)
+          VALUES (?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             card_count = excluded.card_count,
             unique_cards = excluded.unique_cards,
-            updated_at = excluded.updated_at`,
-    args: [ownerId, name, totalCards, uniqueCards, updatedAt],
+            updated_at = excluded.updated_at,
+            source_url = excluded.source_url`,
+    args: [ownerId, name, totalCards, uniqueCards, updatedAt, sourceUrl],
   });
 
   await db.execute({ sql: "DELETE FROM collection_cards WHERE owner_id = ?", args: [ownerId] });
@@ -182,7 +202,7 @@ export async function replaceCollection(
     }
   }
 
-  return { id: ownerId, name, cardCount: totalCards, uniqueCards, updatedAt };
+  return { id: ownerId, name, cardCount: totalCards, uniqueCards, updatedAt, sourceUrl };
 }
 
 export async function deleteOwner(ownerId: string): Promise<void> {

@@ -10,39 +10,63 @@ interface Props {
   onChanged: () => void;
 }
 
+type Source = "csv" | "link";
+
 export function CollectionsPanel({ owners, onChanged }: Props) {
+  const [source, setSource] = useState<Source>("csv");
   const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState<string | null>(null);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function upload(event: React.FormEvent) {
+  async function add(event: React.FormEvent) {
     event.preventDefault();
     const file = fileRef.current?.files?.[0];
 
-    if (!name.trim()) return setStatus({ kind: "error", text: "Add a name first." });
-    if (!file) return setStatus({ kind: "error", text: "Choose a CSV export." });
+    if (source === "csv") {
+      if (!name.trim()) return setStatus({ kind: "error", text: "Add a name first." });
+      if (!file) return setStatus({ kind: "error", text: "Choose a CSV export." });
+    } else if (!url.trim()) {
+      return setStatus({ kind: "error", text: "Paste a Deckbox collection link." });
+    }
 
     setBusy(true);
-    setStatus(null);
+    setStatus({
+      kind: "ok",
+      text:
+        source === "link"
+          ? "Reading the collection — large ones take a minute…"
+          : "Loading…",
+    });
 
     const body = new FormData();
     body.append("name", name.trim());
-    body.append("file", file);
+    if (source === "csv" && file) body.append("file", file);
+    if (source === "link") body.append("url", url.trim());
 
     try {
       const response = await fetch("/api/owners", { method: "POST", body });
       const data = await response.json();
 
       if (!response.ok) {
-        setStatus({ kind: "error", text: data.error ?? "Upload failed." });
+        setStatus({ kind: "error", text: data.error ?? "Import failed." });
       } else {
-        const skipped = data.skipped > 0 ? `, ${data.skipped} rows skipped` : "";
+        const extra =
+          data.source === "deckbox"
+            ? ` across ${data.pagesFetched} pages`
+            : data.skipped > 0
+              ? `, ${data.skipped} rows skipped`
+              : "";
         setStatus({
           kind: "ok",
-          text: `Loaded ${data.owner.cardCount.toLocaleString()} cards for ${data.owner.name}${skipped}.`,
+          text:
+            `Loaded ${data.owner.cardCount.toLocaleString()} cards for ${data.owner.name}${extra}.` +
+            (data.warning ? ` ${data.warning}` : ""),
         });
         setName("");
+        setUrl("");
         if (fileRef.current) fileRef.current.value = "";
         onChanged();
       }
@@ -50,6 +74,28 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
       setStatus({ kind: "error", text: "Could not reach the server." });
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function refresh(owner: Owner) {
+    setRefreshing(owner.id);
+    setStatus(null);
+    try {
+      const response = await fetch(`/api/owners/${owner.id}/refresh`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        setStatus({ kind: "error", text: data.error ?? "Refresh failed." });
+      } else {
+        setStatus({
+          kind: "ok",
+          text: `${owner.name} refreshed — ${data.owner.cardCount.toLocaleString()} cards.`,
+        });
+        onChanged();
+      }
+    } catch {
+      setStatus({ kind: "error", text: "Could not reach the server." });
+    } finally {
+      setRefreshing(null);
     }
   }
 
@@ -72,38 +118,79 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
       ) : (
         <ul className="mt-3 space-y-2">
           {owners.map((owner) => (
-            <li
-              key={owner.id}
-              className="flex items-center justify-between gap-3 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/60"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{owner.name}</p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {owner.cardCount.toLocaleString()} cards ·{" "}
-                  {owner.uniqueCards.toLocaleString()} unique · updated{" "}
-                  {relativeDate(owner.updatedAt)}
-                </p>
+            <li key={owner.id} className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/60">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-medium">{owner.name}</span>
+                    {owner.sourceUrl && (
+                      <span
+                        className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-normal text-sky-800 dark:bg-sky-950 dark:text-sky-300"
+                        title={owner.sourceUrl}
+                      >
+                        linked
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                    {owner.cardCount.toLocaleString()} cards ·{" "}
+                    {owner.uniqueCards.toLocaleString()} unique · updated{" "}
+                    {relativeDate(owner.updatedAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  {owner.sourceUrl && (
+                    <button
+                      onClick={() => refresh(owner)}
+                      disabled={refreshing === owner.id}
+                      className="rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-sky-50 hover:text-sky-600 disabled:opacity-50 dark:hover:bg-sky-950 dark:hover:text-sky-400"
+                    >
+                      {refreshing === owner.id ? "Refreshing…" : "Refresh"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => remove(owner)}
+                    className="rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => remove(owner)}
-                className="shrink-0 rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
-              >
-                Remove
-              </button>
             </li>
           ))}
         </ul>
       )}
 
-      <form onSubmit={upload} className="mt-5 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+      <form onSubmit={add} className="mt-5 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+        <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
+          {(["csv", "link"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => {
+                setSource(option);
+                setStatus(null);
+              }}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                source === option
+                  ? "bg-white shadow-sm dark:bg-zinc-950"
+                  : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              {option === "csv" ? "CSV file" : "Deckbox link"}
+            </button>
+          ))}
+        </div>
+
         <div>
           <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            Whose collection?
+            Whose collection?{" "}
+            {source === "link" && <span className="font-normal">(optional)</span>}
           </label>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. Hunter"
+            placeholder={source === "link" ? "Taken from Deckbox if blank" : "e.g. Hunter"}
             className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
           />
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
@@ -111,24 +198,42 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
           </p>
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-            Collection CSV
-          </label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,.tsv,.txt,text/csv"
-            className="mt-1 w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-zinc-200 dark:file:bg-zinc-800 dark:hover:file:bg-zinc-700"
-          />
-        </div>
+        {source === "csv" ? (
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Collection CSV
+            </label>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.tsv,.txt,text/csv"
+              className="mt-1 w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-zinc-200 dark:file:bg-zinc-800 dark:hover:file:bg-zinc-700"
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              Deckbox collection link
+            </label>
+            <input
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://deckbox.org/sets/123456"
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-xs outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
+            />
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+              The collection must be public. Add <code>?s=t</code> to import only cards marked
+              for trade. Linked collections get a <strong>Refresh</strong> button.
+            </p>
+          </div>
+        )}
 
         <button
           type="submit"
           disabled={busy}
           className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
         >
-          {busy ? "Loading…" : "Add collection"}
+          {busy ? "Working…" : "Add collection"}
         </button>
 
         {status && (
@@ -145,17 +250,20 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
       </form>
 
       <details className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-        <summary className="cursor-pointer font-medium">How do I export from Moxfield?</summary>
-        <ol className="mt-2 list-decimal space-y-1 pl-4">
-          <li>Open your collection on Moxfield.</li>
+        <summary className="cursor-pointer font-medium">Where do I get these?</summary>
+        <p className="mt-2 font-medium">Moxfield, ManaBox, Archidekt, Helvault (CSV)</p>
+        <ol className="mt-1 list-decimal space-y-1 pl-4">
+          <li>Open your collection.</li>
           <li>
-            Use the <strong>⋯</strong> / <strong>Export</strong> button above the card list.
+            Use the <strong>Export</strong> option and choose CSV.
           </li>
-          <li>Choose CSV and download.</li>
-          <li>Upload that file here.</li>
+          <li>Upload the file here.</li>
         </ol>
-        <p className="mt-2">
-          ManaBox, Deckbox, Archidekt and Helvault exports work too — columns are matched by name.
+        <p className="mt-2 font-medium">Deckbox (link)</p>
+        <p className="mt-1">
+          Copy the URL of your inventory page — it looks like{" "}
+          <code>deckbox.org/sets/123456</code>. Deckbox is the only major site that serves
+          collections publicly, so it is the only one that can be imported by link.
         </p>
       </details>
     </section>

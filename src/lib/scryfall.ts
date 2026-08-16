@@ -169,6 +169,43 @@ async function postCollection(identifiers: CardIdentifier[]): Promise<{
   };
 }
 
+const SET_INDEX_KEY = "meta:set-index";
+const SET_INDEX_TTL_MS = 7 * 24 * 60 * 60 * 1000; // New sets appear rarely.
+
+/**
+ * Map set names to set codes.
+ *
+ * Deckbox labels printings with the set's full name ("Tempest") while
+ * pricing needs its code ("tmp"). Scryfall returns every set in one request,
+ * so the whole index is fetched once and cached for a week.
+ */
+export async function getSetCodeIndex(): Promise<Map<string, string>> {
+  const cached = await readCache([SET_INDEX_KEY], SET_INDEX_TTL_MS);
+  const raw = cached.get(SET_INDEX_KEY);
+  if (raw) {
+    return new Map(Object.entries(JSON.parse(raw) as Record<string, string>));
+  }
+
+  try {
+    const response = await throttle(() =>
+      fetch(`${API}/sets`, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } }),
+    );
+    if (!response.ok) return new Map();
+
+    const body = (await response.json()) as { data?: Array<{ code: string; name: string }> };
+    const index: Record<string, string> = {};
+    for (const set of body.data ?? []) {
+      index[normalizeName(set.name)] = set.code;
+    }
+
+    await writeCache([[SET_INDEX_KEY, JSON.stringify(index)]]);
+    return new Map(Object.entries(index));
+  } catch {
+    // Without the index, imported cards simply fall back to name-only pricing.
+    return new Map();
+  }
+}
+
 /** Last-resort single-card lookup that tolerates typos and partial names. */
 async function fuzzyNamed(name: string): Promise<ScryfallCard | null> {
   const response = await throttle(() =>

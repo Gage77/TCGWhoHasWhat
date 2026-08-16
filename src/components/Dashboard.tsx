@@ -1,0 +1,159 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+import { CollectionsPanel } from "@/components/CollectionsPanel";
+import { ResultsTable } from "@/components/ResultsTable";
+import type { Owner } from "@/lib/db";
+import { money } from "@/lib/format";
+import type { SearchResponse } from "@/lib/search";
+
+const PLACEHOLDER = `Sol Ring
+4x Lightning Bolt
+Rhystic Study
+Smothering Tithe`;
+
+/**
+ * Owners are rendered from server props rather than client state, so an
+ * upload just refreshes the route and the list comes back updated.
+ */
+export function Dashboard({ owners }: { owners: Owner[] }) {
+  const router = useRouter();
+  const [list, setList] = useState("");
+  const [results, setResults] = useState<SearchResponse | null>(null);
+  const [tradeableOnly, setTradeableOnly] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function search(event: React.FormEvent) {
+    event.preventDefault();
+    if (!list.trim()) return;
+
+    setSearching(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ list }),
+      });
+      const data = await response.json();
+      if (!response.ok) setError(data.error ?? "Search failed.");
+      else setResults(data as SearchResponse);
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  const summary = results?.summary;
+
+  return (
+    <main className="mx-auto w-full max-w-7xl px-6 py-10">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Who Has What</h1>
+        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+          Paste a list of cards and see which of your playgroup&apos;s collections have them.
+        </p>
+      </header>
+
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <CollectionsPanel owners={owners} onChanged={() => router.refresh()} />
+
+        <section className="space-y-6">
+          <form
+            onSubmit={search}
+            className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            <label
+              htmlFor="wantlist"
+              className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
+            >
+              Cards to look for
+            </label>
+            <textarea
+              id="wantlist"
+              value={list}
+              onChange={(event) => setList(event.target.value)}
+              rows={8}
+              spellCheck={false}
+              placeholder={PLACEHOLDER}
+              className="mt-2 w-full resize-y rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
+            />
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+              One card per line. Quantities (<code>4x Sol Ring</code>) and pasted decklists both
+              work.
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-4">
+              <button
+                type="submit"
+                disabled={searching || owners.length === 0}
+                className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {searching ? "Searching…" : "Find these cards"}
+              </button>
+
+              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={tradeableOnly}
+                  onChange={(event) => setTradeableOnly(event.target.checked)}
+                  className="size-4 accent-emerald-600"
+                />
+                Only count copies marked for trade
+              </label>
+
+              {owners.length === 0 && (
+                <span className="text-sm text-amber-600 dark:text-amber-400">
+                  Add at least one collection first.
+                </span>
+              )}
+            </div>
+
+            {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+          </form>
+
+          {summary && (
+            <div className="flex flex-wrap gap-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <Stat label="Searched" value={summary.cardsSearched.toString()} />
+              <Stat
+                label="Someone has"
+                value={summary.cardsFound.toString()}
+                tone="text-emerald-600 dark:text-emerald-400"
+              />
+              <Stat
+                label="Nobody has"
+                value={summary.cardsMissing.toString()}
+                tone={summary.cardsMissing > 0 ? "text-amber-600 dark:text-amber-400" : undefined}
+              />
+              <Stat label="Value of copies found" value={money(summary.totalValueFound)} />
+            </div>
+          )}
+
+          {summary && summary.unrecognized.length > 0 && (
+            <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+              Not recognised as Magic cards: {summary.unrecognized.join(", ")}
+            </p>
+          )}
+
+          {results && results.rows.length > 0 && (
+            <ResultsTable rows={results.rows} owners={owners} tradeableOnly={tradeableOnly} />
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className={`text-xl font-semibold ${tone ?? ""}`}>{value}</p>
+    </div>
+  );
+}

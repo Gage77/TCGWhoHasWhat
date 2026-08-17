@@ -10,6 +10,7 @@ function copy(over: Partial<Parameters<typeof buildTradeCards>[0][0]["copies"][0
     tradelistQuantity: 1,
     price: 1,
     priceApproximate: false,
+    imageUri: null,
     setCode: "abc",
     collectorNumber: "1",
     finish: "normal",

@@ -120,6 +120,15 @@ blocking the match, so a pile's value is a floor, not a guarantee.
 The **only copies marked for trade** toggle applies here too, so cards someone owns but
 isn't parting with stay out of the maths.
 
+## Card previews
+
+Hovering a card name shows the card. In an expanded row, hovering a printing's set code
+(the dotted-underlined `TLA #304`) shows *that* printing specifically — which is how you
+tell a showcase or promo version from the regular one before agreeing to a trade. Previews
+appear on the Trades tab too.
+
+Images come from Scryfall's CDN and are loaded only on hover.
+
 ## Prices
 
 Prices come from [Scryfall](https://scryfall.com), which aggregates TCGplayer (USD) and

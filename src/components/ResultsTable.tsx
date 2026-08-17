@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { CardPreview } from "@/components/CardPreview";
 import type { Owner } from "@/lib/db";
 import { money } from "@/lib/format";
 import type { SearchRow } from "@/lib/search";
@@ -93,7 +94,13 @@ export function ResultsTable({ rows, owners, tradeableOnly, deckMode = false }: 
                       <span className="text-xs text-zinc-400">{isOpen ? "▾" : "▸"}</span>
                     )}
                     <div className={found ? "" : "pl-4"}>
-                      <span className="font-medium">{row.resolvedName ?? row.query}</span>
+                      <CardPreview
+                        src={row.imageUri}
+                        alt={row.resolvedName ?? row.query}
+                        className="font-medium"
+                      >
+                        {row.resolvedName ?? row.query}
+                      </CardPreview>
                       {deckMode ? (
                         <span className="ml-2 text-xs text-zinc-500">
                           need {row.quantityMissing}
@@ -149,10 +156,14 @@ export function ResultsTable({ rows, owners, tradeableOnly, deckMode = false }: 
                                 key={index}
                                 className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-600 dark:text-zinc-400"
                               >
-                                <span className="font-mono uppercase">
+                                <CardPreview
+                                  src={copy.imageUri}
+                                  alt={`${row.resolvedName ?? row.query} (${copy.setName ?? copy.setCode ?? ""})`}
+                                  className="font-mono uppercase underline decoration-dotted underline-offset-2"
+                                >
                                   {copy.setCode ?? "?"}
                                   {copy.collectorNumber ? ` #${copy.collectorNumber}` : ""}
-                                </span>
+                                </CardPreview>
                                 <span>{copy.setName ?? ""}</span>
                                 {FINISH_LABEL[copy.finish] && (
                                   <span className="rounded bg-amber-100 px-1.5 text-amber-800 dark:bg-amber-950 dark:text-amber-300">

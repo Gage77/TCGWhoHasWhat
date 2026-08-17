@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { CardPreview } from "@/components/CardPreview";
 import type { Owner } from "@/lib/db";
 import { money } from "@/lib/format";
 import type { TradeCard, TradePartner, TradeReport } from "@/lib/trades";
@@ -290,7 +291,9 @@ function TradeColumn({
                   {card.quantityMatched > 1 && (
                     <span className="mr-1 text-zinc-500">{card.quantityMatched}×</span>
                   )}
-                  {card.name}
+                  <CardPreview src={card.copies[0]?.imageUri ?? null} alt={card.name}>
+                    {card.name}
+                  </CardPreview>
                   {card.quantityMatched < card.quantityWanted && (
                     <span
                       className="ml-1 text-xs text-amber-600 dark:text-amber-400"

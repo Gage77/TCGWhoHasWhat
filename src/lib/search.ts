@@ -23,6 +23,8 @@ export interface CopyMatch {
   /** True when the price came from a different finish of the same printing. */
   priceApproximate: boolean;
   scryfallUri: string | null;
+  /** Art for this exact printing, which is how people tell versions apart. */
+  imageUri: string | null;
 }
 
 export interface OwnerMatch {
@@ -228,6 +230,7 @@ export async function runSearch(
         price,
         priceApproximate: approximate,
         scryfallUri: printing?.scryfallUri ?? null,
+        imageUri: printing?.imageUri ?? null,
       });
     }
 

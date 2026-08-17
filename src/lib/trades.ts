@@ -72,6 +72,7 @@ function groupByWant(matches: WantMatch[], cards: Map<string, ResolvedCard>): Wa
       condition: match.condition,
       price,
       priceApproximate: approximate,
+      imageUri: printing?.imageUri ?? null,
       quantity: match.quantity,
       tradelistQuantity: match.tradelistQuantity,
     } satisfies PricedCopy);

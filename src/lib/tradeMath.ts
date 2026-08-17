@@ -14,6 +14,8 @@ export interface TradeCopy {
   price: number | null;
   /** True when the price came from a different finish of the same printing. */
   priceApproximate: boolean;
+  /** Art for this exact printing, which is how people tell versions apart. */
+  imageUri: string | null;
 }
 
 /** One collection row, already priced. */
@@ -93,6 +95,7 @@ export function buildTradeCards(groups: WantGroup[], tradeableOnly: boolean): Tr
             condition: copy.condition,
             price: copy.price,
             priceApproximate: copy.priceApproximate,
+            imageUri: copy.imageUri,
           }),
         )
         .sort((a, b) => (a.price ?? 0) - (b.price ?? 0)),

@@ -41,6 +41,11 @@ export interface SearchRow {
   /** The line as typed, so the user can spot their own typos. */
   query: string;
   quantityWanted: number;
+  /** Printing the line named, if the paste was specific about one. */
+  wantedSetCode: string | null;
+  wantedCollectorNumber: string | null;
+  /** 1 when the line was marked "!". Carried so it survives into a want list. */
+  priority: number;
   /** Deck mode: copies the searcher already has. Zero otherwise. */
   quantityOwned: number;
   /** Copies still needed — equal to quantityWanted outside deck mode. */
@@ -257,6 +262,9 @@ export async function runSearch(
     rows.push({
       query: want.name,
       quantityWanted: want.quantity,
+      wantedSetCode: want.setCode,
+      wantedCollectorNumber: want.collectorNumber,
+      priority: want.priority,
       quantityOwned,
       quantityMissing,
       resolvedName: reference?.name ?? null,

@@ -5,6 +5,9 @@
  * Moxfield/Arena exports with printing hints ("1 Sol Ring (C21) 263"), and
  * MTGO-style sideboard prefixes. Deck-export section headers are ignored so a
  * whole decklist can be pasted straight in.
+ *
+ * A leading "!" marks a card as high priority — the one you actually want out
+ * of the list — which is a thing people already write by hand.
  */
 
 export interface WantedCard {
@@ -13,6 +16,8 @@ export interface WantedCard {
   /** Printing hint from an export line, if the paste included one. */
   setCode: string | null;
   collectorNumber: string | null;
+  /** 1 when the line was marked "!", 0 otherwise. */
+  priority: number;
 }
 
 const SECTION_WORDS = new Set([
@@ -51,6 +56,14 @@ export function parseWantList(input: string): WantedCard[] {
 
     // MTGO sideboard prefix
     line = line.replace(/^SB:\s*/i, "");
+
+    // "!Rhystic Study" / "!2x Sol Ring" — the cards you actually care about.
+    let priority = 0;
+    if (line.startsWith("!")) {
+      priority = 1;
+      line = line.slice(1).trim();
+      if (!line) continue;
+    }
 
     // Leading quantity: "4x Sol Ring", "4 Sol Ring", "4 x Sol Ring"
     let quantity = 1;
@@ -94,8 +107,9 @@ export function parseWantList(input: string): WantedCard[] {
     const existing = wanted.get(key);
     if (existing) {
       existing.quantity += quantity;
+      existing.priority = Math.max(existing.priority, priority);
     } else {
-      wanted.set(key, { name: line, quantity, setCode, collectorNumber });
+      wanted.set(key, { name: line, quantity, setCode, collectorNumber, priority });
     }
   }
 

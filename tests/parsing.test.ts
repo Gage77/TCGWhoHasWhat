@@ -115,3 +115,34 @@ test("parseWantList merges duplicate lines", () => {
   assert.equal(wanted.length, 1);
   assert.equal(wanted[0].quantity, 5);
 });
+
+test("parseWantList reads the priority marker", () => {
+  const wants = parseWantList(["!Rhystic Study", "!2x Sol Ring", "Llanowar Elves"].join("\n"));
+  const byName = new Map(wants.map((want) => [want.name, want]));
+
+  assert.equal(byName.get("Rhystic Study")?.priority, 1);
+  assert.equal(byName.get("Sol Ring")?.priority, 1);
+  assert.equal(byName.get("Sol Ring")?.quantity, 2);
+  assert.equal(byName.get("Llanowar Elves")?.priority, 0);
+});
+
+test("a card marked priority on any line stays a priority", () => {
+  const [want] = parseWantList("Sol Ring\n!Sol Ring");
+  assert.equal(want.quantity, 2);
+  assert.equal(want.priority, 1);
+});
+
+test("a bare exclamation mark is not a card", () => {
+  assert.deepEqual(parseWantList("!\n!  "), []);
+});
+
+test("the want-list editor's rendering round-trips back to the same want", () => {
+  // WantLists renders saved wants as "!2x Name (SET) 123"; parsing that has to
+  // give back what was stored or editing a list would quietly rewrite it.
+  const [want] = parseWantList("!2x Dockside Extortionist (LCI) 106");
+  assert.equal(want.name, "Dockside Extortionist");
+  assert.equal(want.quantity, 2);
+  assert.equal(want.priority, 1);
+  assert.equal(want.setCode, "lci");
+  assert.equal(want.collectorNumber, "106");
+});

@@ -27,8 +27,11 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       return NextResponse.json({ error: "That collection now looks empty." }, { status: 400 });
     }
 
-    const updated = await replaceCollection(owner.name, result.cards, owner.sourceUrl);
-    return NextResponse.json({ owner: updated, pagesFetched: result.pagesFetched });
+    const { owner: updated, diff } = await replaceCollection(owner.name, result.cards, {
+      sourceUrl: owner.sourceUrl,
+      tracker: owner.tracker,
+    });
+    return NextResponse.json({ owner: updated, diff, pagesFetched: result.pagesFetched });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not refresh that collection." },

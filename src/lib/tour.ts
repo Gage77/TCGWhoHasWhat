@@ -47,6 +47,13 @@ export const TOUR_STEPS: TourStep[] = [
     body: "Everyone's cards live here. Upload a CSV export from Moxfield, ManaBox, Archidekt or Helvault — or paste a public Deckbox link, which adds a Refresh button so you never have to ask for an export again. Re-uploading under the same name replaces that person's collection.",
   },
   {
+    target: "update-collection",
+    tab: "search",
+    skipIfMissing: true,
+    title: "Keep them honest",
+    body: "A collection is only as good as its last export, and a stale one quietly turns into bad trade advice. Update sets the form up to replace that person's collection — and tells you where their tracker keeps its export button. Anything older than a couple of weeks gets flagged here, on trade offers, and above search results.",
+  },
+  {
     target: "identity",
     title: "Tell it who you are",
     body: "Both halves of the app need to know whose side you're on: the search tab to subtract cards you already own, the trades tab to know what you'd be giving up. Set it once — it's remembered in this browser.",

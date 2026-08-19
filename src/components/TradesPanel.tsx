@@ -5,7 +5,7 @@ import { useState } from "react";
 import { CardPreview } from "@/components/CardPreview";
 import { WantLists } from "@/components/WantLists";
 import type { Owner } from "@/lib/db";
-import { money } from "@/lib/format";
+import { freshnessOf, money, relativeDate } from "@/lib/format";
 import type { EvenUpSuggestion, TradeCard, TradePartner, TradeReport } from "@/lib/trades";
 
 interface Props {
@@ -94,6 +94,14 @@ export function TradesPanel({ owners, meId, wantCounts, onWantsChanged }: Props)
         {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       </section>
 
+      {report && freshnessOf(report.ownerUpdatedAt) !== "fresh" && (
+        <Notice>
+          Your own collection was last updated {relativeDate(report.ownerUpdatedAt)}. Everything
+          below assumes you still have all of it — worth a fresh export before you promise
+          anyone anything.
+        </Notice>
+      )}
+
       {report && report.partners.length === 0 && (
         <Notice>
           {report.youHaveNoWants
@@ -142,6 +150,13 @@ function PartnerCard({ partner, youName }: { partner: TradePartner; youName: str
           )}
         </p>
       </header>
+
+      {freshnessOf(partner.ownerUpdatedAt) !== "fresh" && (
+        <p className="border-b border-zinc-200 px-5 py-2 text-xs text-amber-700 dark:border-zinc-800 dark:text-amber-400">
+          {partner.ownerName}&apos;s collection was last updated{" "}
+          {relativeDate(partner.ownerUpdatedAt)}, so some of these may have moved on.
+        </p>
+      )}
 
       {partner.evenUp && (
         <EvenUpNote suggestion={partner.evenUp} youName={youName} themName={partner.ownerName} />

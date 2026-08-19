@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 
+import { describeDiff, type CollectionDiff } from "@/lib/collectionDiff";
 import type { Owner } from "@/lib/db";
-import { relativeDate } from "@/lib/format";
+import { freshnessOf, relativeDate } from "@/lib/format";
 
 interface Props {
   owners: Owner[];
@@ -12,14 +13,66 @@ interface Props {
 
 type Source = "csv" | "link";
 
+/** What each tracker calls itself, for instructions worth following. */
+const TRACKER_LABELS: Record<string, string> = {
+  moxfield: "Moxfield",
+  manabox: "ManaBox",
+  deckbox: "Deckbox",
+  archidekt: "Archidekt",
+};
+
+/**
+ * How to get a fresh export, as specific as we can be.
+ *
+ * A CSV collection only gets fresher when someone re-exports it, and the
+ * commonest reason they don't is not remembering where the button was.
+ */
+function updateHint(owner: Owner): string {
+  const label = owner.tracker ? TRACKER_LABELS[owner.tracker] : null;
+  if (label === "Moxfield") {
+    return `Open your ${label} collection, use ⋯ → Export → CSV, and upload it as ${owner.name}.`;
+  }
+  if (label) return `Export a fresh CSV from ${label} and upload it as ${owner.name}.`;
+  return `Export a fresh CSV from wherever you track your collection and upload it as ${owner.name}.`;
+}
+
+/** Age styling: quiet until it is old enough to give someone a bad trade. */
+const AGE_CLASS: Record<string, string> = {
+  fresh: "text-zinc-500 dark:text-zinc-400",
+  aging: "text-amber-600 dark:text-amber-400",
+  stale: "text-red-600 dark:text-red-400",
+};
+
+/** The upload result in one line, including what changed. */
+function loadedMessage(name: string, cardCount: number, extra: string, diff?: CollectionDiff) {
+  const change = diff ? describeDiff(diff) : null;
+  return (
+    `Loaded ${cardCount.toLocaleString()} cards for ${name}${extra}` +
+    (change ? ` — ${change}.` : ".")
+  );
+}
+
 export function CollectionsPanel({ owners, onChanged }: Props) {
   const [source, setSource] = useState<Source>("csv");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState<string | null>(null);
-  const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [status, setStatus] = useState<{ kind: "ok" | "error" | "hint"; text: string } | null>(
+    null,
+  );
+  const [helpOpen, setHelpOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  /** Set the form up to replace one person's collection. */
+  function startUpdate(owner: Owner) {
+    setSource("csv");
+    setName(owner.name);
+    setStatus({ kind: "hint", text: updateHint(owner) });
+    setHelpOpen(true);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 
   async function add(event: React.FormEvent) {
     event.preventDefault();
@@ -62,7 +115,7 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
         setStatus({
           kind: "ok",
           text:
-            `Loaded ${data.owner.cardCount.toLocaleString()} cards for ${data.owner.name}${extra}.` +
+            loadedMessage(data.owner.name, data.owner.cardCount, extra, data.diff) +
             (data.warning ? ` ${data.warning}` : ""),
         });
         setName("");
@@ -86,9 +139,12 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
       if (!response.ok) {
         setStatus({ kind: "error", text: data.error ?? "Refresh failed." });
       } else {
+        const change = data.diff ? describeDiff(data.diff) : null;
         setStatus({
           kind: "ok",
-          text: `${owner.name} refreshed — ${data.owner.cardCount.toLocaleString()} cards.`,
+          text:
+            `${owner.name} refreshed — ${data.owner.cardCount.toLocaleString()} cards` +
+            (change ? `, ${change}.` : "."),
         });
         onChanged();
       }
@@ -126,22 +182,40 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium">{owner.name}</span>
-                    {owner.sourceUrl && (
+                    {owner.sourceUrl ? (
                       <span
                         className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-normal text-sky-800 dark:bg-sky-950 dark:text-sky-300"
                         title={owner.sourceUrl}
                       >
                         linked
                       </span>
+                    ) : (
+                      owner.tracker &&
+                      TRACKER_LABELS[owner.tracker] && (
+                        <span className="shrink-0 rounded bg-zinc-200 px-1.5 py-0.5 text-xs font-normal text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                          {TRACKER_LABELS[owner.tracker]}
+                        </span>
+                      )
                     )}
                   </div>
                   <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                     {owner.cardCount.toLocaleString()} cards ·{" "}
-                    {owner.uniqueCards.toLocaleString()} unique · updated{" "}
-                    {relativeDate(owner.updatedAt)}
+                    {owner.uniqueCards.toLocaleString()} unique ·{" "}
+                    <span className={AGE_CLASS[freshnessOf(owner.updatedAt)]}>
+                      updated {relativeDate(owner.updatedAt)}
+                    </span>
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
+                  {!owner.sourceUrl && (
+                    <button
+                      onClick={() => startUpdate(owner)}
+                      data-tour="update-collection"
+                      className="rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
+                    >
+                      Update
+                    </button>
+                  )}
                   {owner.sourceUrl && (
                     <button
                       onClick={() => refresh(owner)}
@@ -164,7 +238,7 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
         </ul>
       )}
 
-      <form onSubmit={add} className="mt-5 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+      <form ref={formRef} onSubmit={add} className="mt-5 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
         <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
           {(["csv", "link"] as const).map((option) => (
             <button
@@ -244,7 +318,9 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
             className={`text-sm ${
               status.kind === "ok"
                 ? "text-emerald-600 dark:text-emerald-400"
-                : "text-red-600 dark:text-red-400"
+                : status.kind === "hint"
+                  ? "text-zinc-600 dark:text-zinc-300"
+                  : "text-red-600 dark:text-red-400"
             }`}
           >
             {status.text}
@@ -252,7 +328,11 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
         )}
       </form>
 
-      <details className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+      <details
+        open={helpOpen}
+        onToggle={(event) => setHelpOpen(event.currentTarget.open)}
+        className="mt-4 text-xs text-zinc-500 dark:text-zinc-400"
+      >
         <summary className="cursor-pointer font-medium">Where do I get these?</summary>
         <p className="mt-2 font-medium">Moxfield, ManaBox, Archidekt, Helvault (CSV)</p>
         <ol className="mt-1 list-decimal space-y-1 pl-4">

@@ -1,5 +1,5 @@
 import { Dashboard } from "@/components/Dashboard";
-import { groupPassword } from "@/lib/auth";
+import { groupPassword } from "@/lib/config";
 import { listOwners, wantCounts } from "@/lib/db";
 
 // Collections and want lists change on upload, so this page is always fresh.

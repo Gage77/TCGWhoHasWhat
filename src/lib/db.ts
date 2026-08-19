@@ -11,6 +11,7 @@ import { createClient, type Client, type Transaction } from "@libsql/client";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
+import { NO_DATABASE_MESSAGE, isProduction, persistentStorageConfigured } from "./config";
 import type { CollectionCard } from "./csv";
 import { nameKeys, primaryKey } from "./normalize";
 
@@ -126,16 +127,56 @@ const globalForDb = globalThis as unknown as {
 };
 
 async function initClient(): Promise<Client> {
-  const url = process.env.TURSO_DATABASE_URL;
-  let client: Client;
+  const client = connect();
+  await applySchema(client);
 
-  if (url) {
-    client = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
-  } else {
-    const dir = path.join(process.cwd(), "data");
-    mkdirSync(dir, { recursive: true });
-    client = createClient({ url: `file:${path.join(dir, "collections.db")}` });
+  // Per connection, not per schema: ON DELETE CASCADE does nothing without it.
+  await client.execute("PRAGMA foreign_keys = ON");
+
+  return client;
+}
+
+function connect(): Client {
+  const url = process.env.TURSO_DATABASE_URL;
+  if (url) return createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+
+  // Refusing here as well as in the proxy: this is the last point at which a
+  // production deploy can be stopped from writing a collection to a disk it
+  // is about to lose, and scripts and background work never pass the proxy.
+  if (isProduction() && !persistentStorageConfigured()) {
+    throw new Error(NO_DATABASE_MESSAGE);
   }
+
+  const dir = path.join(process.cwd(), "data");
+  mkdirSync(dir, { recursive: true });
+  return createClient({ url: `file:${path.join(dir, "collections.db")}` });
+}
+
+/**
+ * Bring the database up to the current schema, skipping the work when it is
+ * already there.
+ *
+ * Every statement here is a round trip to a hosted database, and on a
+ * serverless host that cost is paid by whoever happens to arrive on a cold
+ * start. Recording which schema was last applied turns roughly two dozen
+ * round trips into two: ask what is applied, and find it already current.
+ *
+ * The stored value is the same fingerprint that keys the connection cache, so
+ * there is exactly one thing to change when the schema changes.
+ */
+async function applySchema(client: Client): Promise<void> {
+  const [, applied] = await client.batch(
+    [
+      `CREATE TABLE IF NOT EXISTS schema_meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )`,
+      `SELECT value FROM schema_meta WHERE key = 'schema'`,
+    ],
+    "write",
+  );
+
+  if (applied.rows[0]?.value === SCHEMA_FINGERPRINT) return;
 
   for (const statement of TABLES) {
     await client.execute(statement);
@@ -155,9 +196,12 @@ async function initClient(): Promise<Client> {
 
   await migrateLooseWants(client);
 
-  await client.execute("PRAGMA foreign_keys = ON");
-
-  return client;
+  // Last, so a run that dies halfway is retried rather than assumed done.
+  await client.execute({
+    sql: `INSERT INTO schema_meta (key, value) VALUES ('schema', ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    args: [SCHEMA_FINGERPRINT],
+  });
 }
 
 /**

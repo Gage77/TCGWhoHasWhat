@@ -8,7 +8,8 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
-import { SESSION_COOKIE, groupPassword, publicAccessAllowed, verifySessionToken } from "@/lib/auth";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { configProblem, groupPassword } from "@/lib/config";
 
 export const config = {
   // Everything except the static assets a login page still needs to render.
@@ -20,16 +21,20 @@ const OPEN_PATHS = new Set(["/login", "/api/session"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const password = groupPassword();
 
-  if (!password) {
-    if (publicAccessAllowed()) return NextResponse.next();
-    return new NextResponse(
-      "GROUP_PASSWORD is not set. Set it to the passphrase you want to share with your " +
-        "group, or set ALLOW_PUBLIC=1 if this really is meant to be open to anyone.",
-      { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } },
-    );
+  // A deploy missing a passphrase or a database is refused here rather than
+  // at the first query, so the mistake is named on the very first request
+  // instead of surfacing as a 500 once somebody uploads something.
+  const problem = configProblem();
+  if (problem) {
+    return new NextResponse(problem, {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   }
+
+  const password = groupPassword();
+  if (!password) return NextResponse.next();
 
   const signedIn = await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value, password);
 

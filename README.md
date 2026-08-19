@@ -235,7 +235,10 @@ Layout:
 | `src/lib/tradeMath.ts` | Trade quantity, value and even-up rules (pure) |
 | `src/lib/trades.ts` | Two-way trade matching between people |
 | `src/lib/db.ts` | libSQL storage, want lists and their migrations |
-| `src/lib/auth.ts` | Group passphrase and session cookie signing |
+| `src/lib/auth.ts` | Session cookie signing and constant-time comparison |
+| `src/lib/config.ts` | What a deploy needs set, and what is wrong when it isn't |
+| `src/lib/rateLimit.ts` | Attempt limiting for the passphrase (pure) |
+| `src/lib/userAgent.ts` | How this app identifies itself to Scryfall and Deckbox |
 | `src/lib/tour.ts` | The guided tour's steps, and the targets they point at |
 | `src/lib/tourPlacement.ts` | Where the tour popup goes (pure) |
 | `src/proxy.ts` | The gate every request passes through |
@@ -255,8 +258,19 @@ TURSO_AUTH_TOKEN=...
 With those set, deploy to Vercel as a normal Next.js app and everyone can upload their
 own collection.
 
+Self-hosting on a box with a real disk instead? Set `ALLOW_LOCAL_DB=1` and it keeps using
+`data/collections.db`.
+
+**A production build with neither refuses to serve**, the same way it does with no
+passphrase, and says which variable is missing. The alternative is worse than an error
+page: uploads succeed, get written to a container's temporary disk, and are gone by the
+time anyone looks for them.
+
 Schema changes are applied on the first connection, so an existing database upgrades in
 place — want lists saved before lists were named end up in a list called "Want list".
+Which schema was last applied is recorded in the database, so only the connection that
+finds it out of date does the work: an up-to-date database costs two round trips to open
+rather than thirty, which is what a cold start on a serverless host is paying for.
 
 ### The group passphrase
 
@@ -270,7 +284,14 @@ GROUP_PASSWORD="four words you can say down the phone"
 
 Signing in sets a signed, httpOnly cookie that lasts 30 days. The passphrase is the
 signing key, so changing it signs everybody out — which is what you want the day someone
-leaves the group. There is no attempt limit, so make it long rather than clever.
+leaves the group.
+
+Eight wrong guesses from one address inside ten minutes and that address waits. The
+counters are held in memory, so on a serverless host each instance keeps its own and a
+determined guesser gets a few more tries than the number suggests — the alternative is a
+database write on every attempt, which is its own way to knock the site over. It stops
+the casual case; a passphrase long enough to be worth guessing at is what stops the rest.
+Make it long rather than clever.
 
 `npm run dev` has no gate, so local work is unaffected. A **production build with no
 `GROUP_PASSWORD` refuses to serve**, on the grounds that an unset variable there is much

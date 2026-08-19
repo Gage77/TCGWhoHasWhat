@@ -1,5 +1,8 @@
 /**
- * Group password gate.
+ * Group password gate: session tokens and constant-time comparison.
+ *
+ * What the passphrase *is* lives in `config.ts` with the rest of the
+ * environment reading; this file only does the cryptography.
  *
  * The app has no per-person accounts on purpose — a playgroup is a group of
  * people who already trust each other, and the thing worth keeping out is the
@@ -12,24 +15,6 @@ export const SESSION_COOKIE = "who-has-what-session";
 /** Long enough that nobody re-types it before a game night comes round. */
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAX_AGE_SECONDS = MAX_AGE_MS / 1000;
-
-/** The configured passphrase, or null when the gate is switched off. */
-export function groupPassword(): string | null {
-  const value = process.env.GROUP_PASSWORD;
-  return value && value.length > 0 ? value : null;
-}
-
-/**
- * Whether running without a passphrase is deliberate.
- *
- * Development has no gate so `npm run dev` still just works. A production
- * build refuses to serve instead, since an unset variable there is far more
- * likely to be a forgotten deploy step than a decision to publish everyone's
- * collection.
- */
-export function publicAccessAllowed(): boolean {
-  return process.env.NODE_ENV !== "production" || process.env.ALLOW_PUBLIC === "1";
-}
 
 const encoder = new TextEncoder();
 

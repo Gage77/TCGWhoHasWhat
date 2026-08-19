@@ -7,7 +7,7 @@
  * changes.
  */
 
-import { createClient, type Client } from "@libsql/client";
+import { createClient, type Client, type Transaction } from "@libsql/client";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
@@ -213,6 +213,35 @@ export function getDb(): Promise<Client> {
   return client;
 }
 
+/**
+ * Anything statements can be run against — the connection, or a transaction.
+ * Lets the insert helpers be shared between the two.
+ */
+type Executor = Pick<Transaction, "execute">;
+
+/**
+ * Run a group of writes as one transaction.
+ *
+ * Every multi-statement write here is a rebuild: replacing a collection
+ * deletes all 20,000 of someone's rows before inserting the new ones, and a
+ * crash or a function timeout in between used to leave that person's
+ * collection half deleted with no way to tell. "write" mode also takes
+ * SQLite's write lock up front, so two people uploading at once queue instead
+ * of interleaving.
+ */
+async function inTransaction<T>(run: (tx: Executor) => Promise<T>): Promise<T> {
+  const db = await getDb();
+  const tx = await db.transaction("write");
+  try {
+    const result = await run(tx);
+    await tx.commit();
+    return result;
+  } finally {
+    // A no-op once committed; rolls back when `run` or the commit threw.
+    tx.close();
+  }
+}
+
 export interface Owner {
   id: string;
   name: string;
@@ -254,97 +283,100 @@ export async function replaceCollection(
   cards: CollectionCard[],
   sourceUrl: string | null = null,
 ): Promise<Owner> {
-  const db = await getDb();
   const name = ownerName.trim();
-
-  const existing = await db.execute({
-    sql: "SELECT id FROM owners WHERE name = ? COLLATE NOCASE",
-    args: [name],
-  });
-
-  const ownerId = existing.rows.length > 0 ? String(existing.rows[0].id) : crypto.randomUUID();
   const totalCards = cards.reduce((sum, card) => sum + card.quantity, 0);
   const uniqueCards = new Set(cards.map((card) => primaryKey(card.name))).size;
   const updatedAt = new Date().toISOString();
 
-  await db.execute({
-    sql: `INSERT INTO owners (id, name, card_count, unique_cards, updated_at, source_url)
-          VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
-            name = excluded.name,
-            card_count = excluded.card_count,
-            unique_cards = excluded.unique_cards,
-            updated_at = excluded.updated_at,
-            source_url = excluded.source_url`,
-    args: [ownerId, name, totalCards, uniqueCards, updatedAt, sourceUrl],
-  });
+  return inTransaction(async (db) => {
+    // Read inside the transaction: two uploads naming the same person must not
+    // both conclude they are the one creating them.
+    const existing = await db.execute({
+      sql: "SELECT id FROM owners WHERE name = ? COLLATE NOCASE",
+      args: [name],
+    });
+    const ownerId = existing.rows.length > 0 ? String(existing.rows[0].id) : crypto.randomUUID();
 
-  await db.execute({ sql: "DELETE FROM collection_cards WHERE owner_id = ?", args: [ownerId] });
-
-  // Batched inserts: a 20k-card collection is a normal size and one
-  // statement per row would take minutes over a network-backed database.
-  const CHUNK = 200;
-  for (let i = 0; i < cards.length; i += CHUNK) {
-    const chunk = cards.slice(i, i + CHUNK);
-    const placeholders = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
-    const args = chunk.flatMap((card) => [
-      ownerId,
-      card.name,
-      card.setCode,
-      card.collectorNumber,
-      card.quantity,
-      card.tradelistQuantity,
-      card.finish,
-      card.condition,
-      card.language,
-      card.scryfallId,
-    ]);
-
-    const inserted = await db.execute({
-      sql: `INSERT INTO collection_cards
-              (owner_id, name, set_code, collector_number, quantity,
-               tradelist_quantity, finish, condition, language, scryfall_id)
-            VALUES ${placeholders}
-            RETURNING id, name`,
-      args,
+    await db.execute({
+      sql: `INSERT INTO owners (id, name, card_count, unique_cards, updated_at, source_url)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              name = excluded.name,
+              card_count = excluded.card_count,
+              unique_cards = excluded.unique_cards,
+              updated_at = excluded.updated_at,
+              source_url = excluded.source_url`,
+      args: [ownerId, name, totalCards, uniqueCards, updatedAt, sourceUrl],
     });
 
-    const keyRows = inserted.rows.flatMap((row) =>
-      nameKeys(String(row.name)).map((key) => ({ cardId: Number(row.id), key })),
-    );
+    await db.execute({ sql: "DELETE FROM collection_cards WHERE owner_id = ?", args: [ownerId] });
 
-    for (let j = 0; j < keyRows.length; j += CHUNK) {
-      const keyChunk = keyRows.slice(j, j + CHUNK);
-      await db.execute({
-        sql: `INSERT INTO card_keys (card_id, name_key) VALUES ${keyChunk
-          .map(() => "(?, ?)")
-          .join(", ")}`,
-        args: keyChunk.flatMap((row) => [row.cardId, row.key]),
+    // Batched inserts: a 20k-card collection is a normal size and one
+    // statement per row would take minutes over a network-backed database.
+    const CHUNK = 200;
+    for (let i = 0; i < cards.length; i += CHUNK) {
+      const chunk = cards.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+      const args = chunk.flatMap((card) => [
+        ownerId,
+        card.name,
+        card.setCode,
+        card.collectorNumber,
+        card.quantity,
+        card.tradelistQuantity,
+        card.finish,
+        card.condition,
+        card.language,
+        card.scryfallId,
+      ]);
+
+      const inserted = await db.execute({
+        sql: `INSERT INTO collection_cards
+                (owner_id, name, set_code, collector_number, quantity,
+                 tradelist_quantity, finish, condition, language, scryfall_id)
+              VALUES ${placeholders}
+              RETURNING id, name`,
+        args,
       });
-    }
-  }
 
-  return { id: ownerId, name, cardCount: totalCards, uniqueCards, updatedAt, sourceUrl };
+      const keyRows = inserted.rows.flatMap((row) =>
+        nameKeys(String(row.name)).map((key) => ({ cardId: Number(row.id), key })),
+      );
+
+      for (let j = 0; j < keyRows.length; j += CHUNK) {
+        const keyChunk = keyRows.slice(j, j + CHUNK);
+        await db.execute({
+          sql: `INSERT INTO card_keys (card_id, name_key) VALUES ${keyChunk
+            .map(() => "(?, ?)")
+            .join(", ")}`,
+          args: keyChunk.flatMap((row) => [row.cardId, row.key]),
+        });
+      }
+    }
+
+    return { id: ownerId, name, cardCount: totalCards, uniqueCards, updatedAt, sourceUrl };
+  });
 }
 
 export async function deleteOwner(ownerId: string): Promise<void> {
-  const db = await getDb();
   // Explicit child deletes: PRAGMA foreign_keys is per-connection and libSQL
   // pooling makes it unsafe to rely on cascade alone.
-  await db.execute({
-    sql: `DELETE FROM card_keys WHERE card_id IN
-            (SELECT id FROM collection_cards WHERE owner_id = ?)`,
-    args: [ownerId],
+  await inTransaction(async (db) => {
+    await db.execute({
+      sql: `DELETE FROM card_keys WHERE card_id IN
+              (SELECT id FROM collection_cards WHERE owner_id = ?)`,
+      args: [ownerId],
+    });
+    await db.execute({ sql: "DELETE FROM collection_cards WHERE owner_id = ?", args: [ownerId] });
+    await db.execute({
+      sql: `DELETE FROM want_keys WHERE want_id IN
+              (SELECT id FROM want_cards WHERE owner_id = ?)`,
+      args: [ownerId],
+    });
+    await db.execute({ sql: "DELETE FROM want_cards WHERE owner_id = ?", args: [ownerId] });
+    await db.execute({ sql: "DELETE FROM want_lists WHERE owner_id = ?", args: [ownerId] });
+    await db.execute({ sql: "DELETE FROM owners WHERE id = ?", args: [ownerId] });
   });
-  await db.execute({ sql: "DELETE FROM collection_cards WHERE owner_id = ?", args: [ownerId] });
-  await db.execute({
-    sql: `DELETE FROM want_keys WHERE want_id IN
-            (SELECT id FROM want_cards WHERE owner_id = ?)`,
-    args: [ownerId],
-  });
-  await db.execute({ sql: "DELETE FROM want_cards WHERE owner_id = ?", args: [ownerId] });
-  await db.execute({ sql: "DELETE FROM want_lists WHERE owner_id = ?", args: [ownerId] });
-  await db.execute({ sql: "DELETE FROM owners WHERE id = ?", args: [ownerId] });
 }
 
 export interface CollectionHit {
@@ -500,14 +532,15 @@ export async function renameWantList(listId: string, name: string): Promise<void
 }
 
 export async function deleteWantList(listId: string): Promise<void> {
-  const db = await getDb();
-  await db.execute({
-    sql: `DELETE FROM want_keys WHERE want_id IN
-            (SELECT id FROM want_cards WHERE list_id = ?)`,
-    args: [listId],
+  await inTransaction(async (db) => {
+    await db.execute({
+      sql: `DELETE FROM want_keys WHERE want_id IN
+              (SELECT id FROM want_cards WHERE list_id = ?)`,
+      args: [listId],
+    });
+    await db.execute({ sql: "DELETE FROM want_cards WHERE list_id = ?", args: [listId] });
+    await db.execute({ sql: "DELETE FROM want_lists WHERE id = ?", args: [listId] });
   });
-  await db.execute({ sql: "DELETE FROM want_cards WHERE list_id = ?", args: [listId] });
-  await db.execute({ sql: "DELETE FROM want_lists WHERE id = ?", args: [listId] });
 }
 
 /** What a caller can ask to be put on a list. */
@@ -519,8 +552,7 @@ export interface WantInput {
   collectorNumber?: string | null;
 }
 
-async function touchList(listId: string): Promise<void> {
-  const db = await getDb();
+async function touchList(db: Executor, listId: string): Promise<void> {
   await db.execute({
     sql: "UPDATE want_lists SET updated_at = ? WHERE id = ?",
     args: [new Date().toISOString(), listId],
@@ -528,12 +560,12 @@ async function touchList(listId: string): Promise<void> {
 }
 
 async function insertWants(
+  db: Executor,
   ownerId: string,
   listId: string,
   wants: WantInput[],
 ): Promise<void> {
   if (wants.length === 0) return;
-  const db = await getDb();
 
   const CHUNK = 200;
   for (let i = 0; i < wants.length; i += CHUNK) {
@@ -574,19 +606,21 @@ export async function replaceWantList(
   listId: string,
   wants: WantInput[],
 ): Promise<WantList | null> {
-  const db = await getDb();
   const list = await getWantList(listId);
   if (!list) return null;
 
-  await db.execute({
-    sql: `DELETE FROM want_keys WHERE want_id IN
-            (SELECT id FROM want_cards WHERE list_id = ?)`,
-    args: [listId],
-  });
-  await db.execute({ sql: "DELETE FROM want_cards WHERE list_id = ?", args: [listId] });
+  await inTransaction(async (db) => {
+    await db.execute({
+      sql: `DELETE FROM want_keys WHERE want_id IN
+              (SELECT id FROM want_cards WHERE list_id = ?)`,
+      args: [listId],
+    });
+    await db.execute({ sql: "DELETE FROM want_cards WHERE list_id = ?", args: [listId] });
 
-  await insertWants(list.ownerId, listId, wants);
-  await touchList(listId);
+    await insertWants(db, list.ownerId, listId, wants);
+    await touchList(db, listId);
+  });
+
   return getWantList(listId);
 }
 
@@ -599,51 +633,57 @@ export async function addToWantList(
   listId: string,
   wants: WantInput[],
 ): Promise<{ list: WantList; added: number; updated: number } | null> {
-  const db = await getDb();
   const list = await getWantList(listId);
   if (!list) return null;
 
-  const existing = await db.execute({
-    sql: "SELECT id, name_key, quantity, priority FROM want_cards WHERE list_id = ?",
-    args: [listId],
-  });
-  const byKey = new Map(
-    existing.rows.map((row) => [
-      String(row.name_key),
-      { id: Number(row.id), quantity: Number(row.quantity), priority: Number(row.priority) },
-    ]),
-  );
-
-  const fresh: WantInput[] = [];
-  let updated = 0;
-
-  for (const want of wants) {
-    const key = primaryKey(want.name);
-    const current = byKey.get(key);
-    if (!current) {
-      fresh.push(want);
-      // Guards against the same card appearing twice in one paste.
-      byKey.set(key, { id: -1, quantity: want.quantity, priority: want.priority ?? 0 });
-      continue;
-    }
-    if (current.id < 0) continue;
-
-    const quantity = Math.max(current.quantity, want.quantity);
-    const priority = Math.max(current.priority, want.priority ?? 0);
-    if (quantity === current.quantity && priority === current.priority) continue;
-
-    await db.execute({
-      sql: "UPDATE want_cards SET quantity = ?, priority = ? WHERE id = ?",
-      args: [quantity, priority, current.id],
+  // The whole merge runs in one transaction: it reads what is already on the
+  // list and writes based on that, so a concurrent add would otherwise decide
+  // what to insert from a snapshot that is no longer true.
+  const { added, updated } = await inTransaction(async (db) => {
+    const existing = await db.execute({
+      sql: "SELECT id, name_key, quantity, priority FROM want_cards WHERE list_id = ?",
+      args: [listId],
     });
-    updated++;
-  }
+    const byKey = new Map(
+      existing.rows.map((row) => [
+        String(row.name_key),
+        { id: Number(row.id), quantity: Number(row.quantity), priority: Number(row.priority) },
+      ]),
+    );
 
-  await insertWants(list.ownerId, listId, fresh);
-  await touchList(listId);
+    const fresh: WantInput[] = [];
+    let changed = 0;
+
+    for (const want of wants) {
+      const key = primaryKey(want.name);
+      const current = byKey.get(key);
+      if (!current) {
+        fresh.push(want);
+        // Guards against the same card appearing twice in one paste.
+        byKey.set(key, { id: -1, quantity: want.quantity, priority: want.priority ?? 0 });
+        continue;
+      }
+      if (current.id < 0) continue;
+
+      const quantity = Math.max(current.quantity, want.quantity);
+      const priority = Math.max(current.priority, want.priority ?? 0);
+      if (quantity === current.quantity && priority === current.priority) continue;
+
+      await db.execute({
+        sql: "UPDATE want_cards SET quantity = ?, priority = ? WHERE id = ?",
+        args: [quantity, priority, current.id],
+      });
+      changed++;
+    }
+
+    await insertWants(db, list.ownerId, listId, fresh);
+    await touchList(db, listId);
+
+    return { added: fresh.length, updated: changed };
+  });
 
   const refreshed = await getWantList(listId);
-  return refreshed ? { list: refreshed, added: fresh.length, updated } : null;
+  return refreshed ? { list: refreshed, added, updated } : null;
 }
 
 /** How many distinct cards each person wants, across all of their lists. */

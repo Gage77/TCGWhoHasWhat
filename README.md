@@ -172,6 +172,33 @@ appear on the Trades tab too.
 
 Images come from Scryfall's CDN and are loaded only on hover.
 
+## The tour
+
+The compass in the top right walks through the whole site: a dark surround with a hole cut
+around whatever is being explained, and a card next to it saying what that part does. It
+switches tabs as it goes, and leaves via Escape, the X, or **Skip tour** at any point.
+
+Steps that have nothing to point at are dropped before the tour starts rather than skipped
+as it runs — with no search results on screen there is no point explaining the results
+table, and a counter that jumps from 7 to 11 looks broken.
+
+### Keeping it honest
+
+Steps live in one place, `src/lib/tour.ts`, and point at `data-tour` attributes in the
+components. Two tests in `tests/tour.test.ts` keep the two in step, so a tour that has
+quietly stopped describing the app fails the build rather than misleading someone:
+
+- every step must point at a `data-tour` attribute that still exists, and
+- every `data-tour` attribute must have a step explaining it.
+
+So **adding a feature means adding a `data-tour` attribute and a step** — the second test
+fails until you do. A third checks that steps pointing into tab-specific components declare
+which tab they need, since otherwise the tour looks for an element that is not on screen.
+
+Placement is a pure function in `src/lib/tourPlacement.ts` with its own tests. It is fussier
+than it looks: the collections panel is taller than the space above and below it, so the
+popup has to go beside it rather than off the top of the window.
+
 ## Prices
 
 Prices come from [Scryfall](https://scryfall.com), which aggregates TCGplayer (USD) and
@@ -208,6 +235,10 @@ Layout:
 | `src/lib/tradeMath.ts` | Trade quantity, value and even-up rules (pure) |
 | `src/lib/trades.ts` | Two-way trade matching between people |
 | `src/lib/db.ts` | libSQL storage, want lists and their migrations |
+| `src/lib/auth.ts` | Group passphrase and session cookie signing |
+| `src/lib/tour.ts` | The guided tour's steps, and the targets they point at |
+| `src/lib/tourPlacement.ts` | Where the tour popup goes (pure) |
+| `src/proxy.ts` | The gate every request passes through |
 
 Collections are stored in `data/collections.db` (gitignored).
 
@@ -227,9 +258,26 @@ own collection.
 Schema changes are applied on the first connection, so an existing database upgrades in
 place — want lists saved before lists were named end up in a list called "Want list".
 
-Note there's no authentication — anyone with the URL can view or replace collections.
-That's fine for a private link shared with friends; put it behind auth before making it
-public.
+### The group passphrase
+
+Set `GROUP_PASSWORD` to whatever you want to tell your group, and every page and API route
+sits behind it. There are no per-person accounts on purpose: a playgroup already trusts
+each other, and the thing worth keeping out is the rest of the internet.
+
+```bash
+GROUP_PASSWORD="four words you can say down the phone"
+```
+
+Signing in sets a signed, httpOnly cookie that lasts 30 days. The passphrase is the
+signing key, so changing it signs everybody out — which is what you want the day someone
+leaves the group. There is no attempt limit, so make it long rather than clever.
+
+`npm run dev` has no gate, so local work is unaffected. A **production build with no
+`GROUP_PASSWORD` refuses to serve**, on the grounds that an unset variable there is much
+more likely to be a forgotten deploy step than a decision to publish everyone's
+collection. Set `ALLOW_PUBLIC=1` if you genuinely mean it.
+
+Copy `.env.example` to `.env.local` to fill these in locally.
 
 ## Other TCGs
 

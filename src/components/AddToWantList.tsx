@@ -123,7 +123,10 @@ export function AddToWantList({ ownerId, cards, label, onChanged }: Props) {
   const copies = cards.reduce((sum, card) => sum + card.quantity, 0);
 
   return (
-    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+    <div
+      data-tour="add-to-want-list"
+      className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-900 dark:bg-emerald-950/30"
+    >
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
           {label} <span className="text-zinc-500 dark:text-zinc-400">({copies} copies)</span>

@@ -6,10 +6,12 @@ import { useState, useSyncExternalStore } from "react";
 import { AddToWantList } from "@/components/AddToWantList";
 import { CollectionsPanel } from "@/components/CollectionsPanel";
 import { ResultsTable } from "@/components/ResultsTable";
+import { Tour, TourButton } from "@/components/Tour";
 import { TradesPanel } from "@/components/TradesPanel";
 import type { Owner } from "@/lib/db";
 import { money } from "@/lib/format";
 import type { SearchResponse } from "@/lib/search";
+import { TOUR_STEPS, selectorFor, type TourStep } from "@/lib/tour";
 
 type Tab = "search" | "trades";
 
@@ -71,9 +73,12 @@ function useIdentity(owners: Owner[]): [string, (id: string) => void] {
 export function Dashboard({
   owners,
   wantCounts,
+  gated,
 }: {
   owners: Owner[];
   wantCounts: Record<string, number>;
+  /** True when a group passphrase is configured, so signing out means something. */
+  gated: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("search");
@@ -85,8 +90,42 @@ export function Dashboard({
   const [tradeableOnly, setTradeableOnly] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Index into `tourSteps`, or null when the tour is not running. */
+  const [tourStep, setTourStep] = useState<number | null>(null);
+  /** The steps this run will actually show, settled when the tour starts. */
+  const [tourSteps, setTourSteps] = useState<TourStep[]>([]);
 
   const deckOwnerId = deckMode && meId ? meId : "";
+
+  /**
+   * Work out which steps this run will show, then start.
+   *
+   * Results and trade offers only exist once there is something to show, so
+   * those steps are dropped up front rather than skipped as we go — otherwise
+   * the counter reads "7 of 15" and then jumps to 11, which looks broken.
+   */
+  function startTour() {
+    const plan = TOUR_STEPS.filter(
+      (step) =>
+        !step.skipIfMissing ||
+        (step.target !== null && document.querySelector(selectorFor(step.target)) !== null),
+    );
+
+    setTourSteps(plan);
+    if (plan[0]?.tab) setTab(plan[0].tab);
+    setTourStep(plan.length > 0 ? 0 : null);
+  }
+
+  function goToTourStep(next: number) {
+    const step = tourSteps[next];
+    if (!step) {
+      setTourStep(null);
+      return;
+    }
+    // The tab has to change before the target can be found.
+    if (step.tab) setTab(step.tab);
+    setTourStep(next);
+  }
 
   async function search(event: React.FormEvent) {
     event.preventDefault();
@@ -136,8 +175,26 @@ export function Dashboard({
           </p>
         </div>
 
-        {owners.length > 0 && (
-          <div>
+        <div className="flex items-end gap-3">
+          <div className="pb-1">
+            <TourButton onClick={startTour} />
+          </div>
+
+          {gated && (
+            <button
+              data-tour="sign-out"
+              onClick={async () => {
+                await fetch("/api/session", { method: "DELETE" });
+                router.refresh();
+              }}
+              className="pb-2 text-xs text-zinc-500 underline-offset-2 transition hover:text-zinc-700 hover:underline dark:hover:text-zinc-300"
+            >
+              Sign out
+            </button>
+          )}
+
+          {owners.length > 0 && (
+          <div data-tour="identity">
             <label
               htmlFor="me"
               className="block text-xs font-medium text-zinc-600 dark:text-zinc-400"
@@ -158,14 +215,22 @@ export function Dashboard({
               ))}
             </select>
           </div>
-        )}
+          )}
+        </div>
       </header>
+
+      <Tour
+        steps={tourSteps}
+        index={tourStep}
+        onIndex={goToTourStep}
+        onClose={() => setTourStep(null)}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <CollectionsPanel owners={owners} onChanged={() => router.refresh()} />
 
         <section className="space-y-6">
-          <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
+          <div data-tour="tabs" className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
             {(
               [
                 ["search", "Find cards"],
@@ -186,18 +251,23 @@ export function Dashboard({
             ))}
           </div>
 
-          {tab === "trades" && (
+          {/*
+            * Kept mounted and hidden, like the search tab: unmounting threw
+            * away a trade report the moment you glanced at the other tab.
+            */}
+          <div className={tab === "trades" ? "" : "hidden"}>
             <TradesPanel
               owners={owners}
               meId={meId}
               wantCounts={wantCounts}
               onWantsChanged={() => router.refresh()}
             />
-          )}
+          </div>
 
           <div className={tab === "search" ? "space-y-6" : "hidden"}>
           <form
             onSubmit={search}
+            data-tour="search-input"
             className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
           >
             <label
@@ -230,6 +300,7 @@ export function Dashboard({
               </button>
 
               <label
+                data-tour="deck-mode"
                 className={`flex items-center gap-2 text-sm ${
                   meId ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-400 dark:text-zinc-600"
                 }`}
@@ -249,7 +320,10 @@ export function Dashboard({
                 Show only what I&apos;m missing
               </label>
 
-              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <label
+                data-tour="tradeable-only"
+                className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
+              >
                 <input
                   type="checkbox"
                   checked={tradeableOnly}
@@ -270,7 +344,10 @@ export function Dashboard({
           </form>
 
           {summary && (
-            <div className="flex flex-wrap gap-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div
+              data-tour="results-summary"
+              className="flex flex-wrap gap-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+            >
               {inDeckMode ? (
                 <>
                   <Stat

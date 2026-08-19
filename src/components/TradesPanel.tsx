@@ -61,6 +61,7 @@ export function TradesPanel({ owners, meId, wantCounts, onWantsChanged }: Props)
           <button
             onClick={findTrades}
             disabled={busy}
+            data-tour="find-trades"
             className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
           >
             {busy ? "Checking…" : "Find trades"}
@@ -83,7 +84,10 @@ export function TradesPanel({ owners, meId, wantCounts, onWantsChanged }: Props)
           </p>
         </div>
 
-        <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+        <div
+          data-tour="want-lists"
+          className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800"
+        >
           <WantLists ownerId={meId} ownerName={me.name} onChanged={onWantsChanged} />
         </div>
 
@@ -118,7 +122,10 @@ function PartnerCard({ partner, youName }: { partner: TradePartner; youName: str
   const even = Math.abs(balance) < 1;
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <section
+      data-tour="trade-partner"
+      className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+    >
       <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
         <h3 className="text-lg font-semibold">{partner.ownerName}</h3>
         <p className="text-sm">

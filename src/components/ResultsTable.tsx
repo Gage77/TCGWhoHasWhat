@@ -62,7 +62,10 @@ export function ResultsTable({ rows, owners, tradeableOnly, deckMode = false }: 
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+    <div
+      data-tour="results-table"
+      className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800"
+    >
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
           <tr>

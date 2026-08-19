@@ -13,8 +13,10 @@ npm run dev
 Open http://localhost:3000, then:
 
 1. Add a collection — enter a name and upload that person's collection CSV.
-2. Paste the cards you're looking for, one per line.
-3. Hit **Find these cards**.
+2. Tell it who you are with the **I am** picker in the top right. It is
+   remembered, so you only do this once per browser.
+3. Paste the cards you're looking for, one per line.
+4. Hit **Find these cards**.
 
 To try it before collecting exports from anyone, upload the three files in `samples/`
 as `alex`, `jordan` and `sam`.
@@ -70,12 +72,13 @@ Anything people actually paste:
 Deck
 4x Lightning Bolt
 2 Sol Ring (C21) 263
-Rhystic Study
+!Rhystic Study
 SB: 1 Pithing Needle
 ```
 
 Quantities, decklist section headers, comments, MTGO `SB:` prefixes and `*F*` foil markers
-are all handled. Names are matched loosely — accents, apostrophes and punctuation don't
+are all handled. A leading `!` marks a card as a priority — those lead the trade lists and
+carry a `!` badge, so the card you actually want out of a list is not buried in it. Names are matched loosely — accents, apostrophes and punctuation don't
 matter (`aangs iceberg` finds `Aang's Iceberg`), and searching one face of a split or
 double-faced card finds the full printing.
 
@@ -96,13 +99,23 @@ Partial holdings are handled: four-of a card you own one of shows as needing thr
 the value shown is the cost of the copies you still need rather than the whole playset.
 Your own column is dropped from the table, since those copies have already been counted.
 
+### Sending the gaps to a want list
+
+Above the results is **Add to want list** — pick one of your lists (or name a new one) and
+the cards you are still missing go straight onto it, quantities, priorities and printing
+hints included. That is the whole point: a gap list you have typed out once is exactly
+what trade matching runs on, and retyping it by hand was the only way to get it there.
+
+Adding merges rather than appends. A card already on the list keeps the larger of the two
+asks, so sending the same deck over twice does not turn one Sol Ring into two.
+
 ## Trades
 
 The **Find cards** tab answers "who has this?". The **Trades** tab answers the question a
 trade actually turns on: between you and each other person, what do they hold that you
 want, and what do you hold that they want?
 
-1. Pick who you are.
+1. Set **I am** in the top right, if you have not already.
 2. Save a want list for yourself (paste it, same format as a search).
 3. Hit **Find trades**.
 
@@ -110,6 +123,36 @@ Each person you could trade with gets a card showing both directions side by sid
 each pile's value and the difference between them — "you'd receive $20.57 more" — so a
 trade can be evened up before anyone drives anywhere. Matches only appear once *both*
 people have saved want lists, since the matching runs off them.
+
+### Want lists are named, and there can be several
+
+A want is really "for my Atraxa deck" rather than an undifferentiated pile, so lists have
+names and you can keep as many as you like. Each card in a trade shows which lists asked
+for it — `for Atraxa upgrades, Cube staples` — which is the difference between "they want
+this" and knowing why.
+
+A card on two lists is still one card to find: the largest single ask wins rather than the
+asks being added together, so listing Sol Ring in every deck does not ask the group for
+six of them.
+
+Naming a printing on a want line — `Dockside Extortionist (C19) 86` — records which
+version you are after. Copies matching it lead the trade list and are called out; if
+nobody has that exact printing, the line says so before anyone agrees to anything.
+
+### Evening a trade up
+
+A balance figure on its own leaves both people squinting at two columns working out which
+card to pull. Under the header is the answer:
+
+```
+To even it up: Alex keeps 2× Smothering Tithe — that closes the gap from $116.46 to $19.52.
+```
+
+Only the heavier side is ever asked to drop cards, since you cannot conjure cards the
+other person does not have. The pick is an exact closest-subset search over the individual
+copies rather than a biggest-first grab — two small cards routinely close a gap that one
+big card overshoots — and it stays quiet unless it can close at least half of the gap,
+because "give up a card and the trade is 1% fairer" is not advice.
 
 Quantities are respected in both directions: wanting 4 of a card someone has 2 of matches
 2. Value counts the cheapest copies that would actually change hands, on the assumption
@@ -128,6 +171,33 @@ tell a showcase or promo version from the regular one before agreeing to a trade
 appear on the Trades tab too.
 
 Images come from Scryfall's CDN and are loaded only on hover.
+
+## The tour
+
+The compass in the top right walks through the whole site: a dark surround with a hole cut
+around whatever is being explained, and a card next to it saying what that part does. It
+switches tabs as it goes, and leaves via Escape, the X, or **Skip tour** at any point.
+
+Steps that have nothing to point at are dropped before the tour starts rather than skipped
+as it runs — with no search results on screen there is no point explaining the results
+table, and a counter that jumps from 7 to 11 looks broken.
+
+### Keeping it honest
+
+Steps live in one place, `src/lib/tour.ts`, and point at `data-tour` attributes in the
+components. Two tests in `tests/tour.test.ts` keep the two in step, so a tour that has
+quietly stopped describing the app fails the build rather than misleading someone:
+
+- every step must point at a `data-tour` attribute that still exists, and
+- every `data-tour` attribute must have a step explaining it.
+
+So **adding a feature means adding a `data-tour` attribute and a step** — the second test
+fails until you do. A third checks that steps pointing into tab-specific components declare
+which tab they need, since otherwise the tour looks for an element that is not on screen.
+
+Placement is a pure function in `src/lib/tourPlacement.ts` with its own tests. It is fussier
+than it looks: the collections panel is taller than the space above and below it, so the
+popup has to go beside it rather than off the top of the window.
 
 ## Prices
 
@@ -162,9 +232,16 @@ Layout:
 | `src/lib/scryfall.ts` | Batched, throttled Scryfall lookups and pricing |
 | `src/lib/search.ts` | The who-has-what query |
 | `src/lib/deckNeed.ts` | Deck-mode subtraction rules (pure) |
-| `src/lib/tradeMath.ts` | Trade quantity and value rules (pure) |
+| `src/lib/tradeMath.ts` | Trade quantity, value and even-up rules (pure) |
 | `src/lib/trades.ts` | Two-way trade matching between people |
-| `src/lib/db.ts` | libSQL storage |
+| `src/lib/db.ts` | libSQL storage, want lists and their migrations |
+| `src/lib/auth.ts` | Session cookie signing and constant-time comparison |
+| `src/lib/config.ts` | What a deploy needs set, and what is wrong when it isn't |
+| `src/lib/rateLimit.ts` | Attempt limiting for the passphrase (pure) |
+| `src/lib/userAgent.ts` | How this app identifies itself to Scryfall and Deckbox |
+| `src/lib/tour.ts` | The guided tour's steps, and the targets they point at |
+| `src/lib/tourPlacement.ts` | Where the tour popup goes (pure) |
+| `src/proxy.ts` | The gate every request passes through |
 
 Collections are stored in `data/collections.db` (gitignored).
 
@@ -181,9 +258,47 @@ TURSO_AUTH_TOKEN=...
 With those set, deploy to Vercel as a normal Next.js app and everyone can upload their
 own collection.
 
-Note there's no authentication — anyone with the URL can view or replace collections.
-That's fine for a private link shared with friends; put it behind auth before making it
-public.
+Self-hosting on a box with a real disk instead? Set `ALLOW_LOCAL_DB=1` and it keeps using
+`data/collections.db`.
+
+**A production build with neither refuses to serve**, the same way it does with no
+passphrase, and says which variable is missing. The alternative is worse than an error
+page: uploads succeed, get written to a container's temporary disk, and are gone by the
+time anyone looks for them.
+
+Schema changes are applied on the first connection, so an existing database upgrades in
+place — want lists saved before lists were named end up in a list called "Want list".
+Which schema was last applied is recorded in the database, so only the connection that
+finds it out of date does the work: an up-to-date database costs two round trips to open
+rather than thirty, which is what a cold start on a serverless host is paying for.
+
+### The group passphrase
+
+Set `GROUP_PASSWORD` to whatever you want to tell your group, and every page and API route
+sits behind it. There are no per-person accounts on purpose: a playgroup already trusts
+each other, and the thing worth keeping out is the rest of the internet.
+
+```bash
+GROUP_PASSWORD="four words you can say down the phone"
+```
+
+Signing in sets a signed, httpOnly cookie that lasts 30 days. The passphrase is the
+signing key, so changing it signs everybody out — which is what you want the day someone
+leaves the group.
+
+Eight wrong guesses from one address inside ten minutes and that address waits. The
+counters are held in memory, so on a serverless host each instance keeps its own and a
+determined guesser gets a few more tries than the number suggests — the alternative is a
+database write on every attempt, which is its own way to knock the site over. It stops
+the casual case; a passphrase long enough to be worth guessing at is what stops the rest.
+Make it long rather than clever.
+
+`npm run dev` has no gate, so local work is unaffected. A **production build with no
+`GROUP_PASSWORD` refuses to serve**, on the grounds that an unset variable there is much
+more likely to be a forgotten deploy step than a decision to publish everyone's
+collection. Set `ALLOW_PUBLIC=1` if you genuinely mean it.
+
+Copy `.env.example` to `.env.local` to fill these in locally.
 
 ## Other TCGs
 

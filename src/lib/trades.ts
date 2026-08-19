@@ -7,7 +7,14 @@
  */
 
 import { findWantMatches, listOwners, type WantMatch } from "./db";
-import { buildTradeCards, type PricedCopy, type TradeCard, type WantGroup } from "./tradeMath";
+import {
+  buildTradeCards,
+  suggestEvenUp,
+  type EvenUpSuggestion,
+  type PricedCopy,
+  type TradeCard,
+  type WantGroup,
+} from "./tradeMath";
 import {
   identifierKey,
   priceForFinish,
@@ -28,6 +35,8 @@ export interface TradePartner {
   /** Positive means you would be giving up more value than you receive. */
   balance: number;
   totalCards: number;
+  /** Which cards to leave out to bring the two piles level. Null when even. */
+  evenUp: EvenUpSuggestion | null;
 }
 
 export interface TradeReport {
@@ -46,19 +55,50 @@ function identifierFor(match: WantMatch): CardIdentifier {
   return { kind: "name", name: match.cardName };
 }
 
-/** Group raw matches by the want they satisfy, pricing each copy. */
+/**
+ * Group raw matches by the card wanted, pricing each copy.
+ *
+ * Grouping is by the folded card name rather than by want row: the same card
+ * can sit on several of one person's lists, and wanting a Sol Ring for two
+ * decks is one Sol Ring to find, not two. The largest single ask wins, and
+ * every list that asked comes along so the trade can say why.
+ */
 function groupByWant(matches: WantMatch[], cards: Map<string, ResolvedCard>): WantGroup[] {
-  const groups = new Map<number, WantGroup>();
+  const groups = new Map<string, WantGroup & { seen: Set<number>; listNames: Set<string> }>();
 
   for (const match of matches) {
-    let group = groups.get(match.wantId);
+    let group = groups.get(match.wantKey);
     if (!group) {
       // Name the card as the collection spells it, not as the want list
       // does: "aangs iceberg" is a fine thing to type, but both people
       // should see the card's actual name on a trade list.
-      group = { name: match.cardName, quantityWanted: match.wantQuantity, copies: [] };
-      groups.set(match.wantId, group);
+      group = {
+        name: match.cardName,
+        quantityWanted: match.wantQuantity,
+        copies: [],
+        lists: [],
+        priority: match.wantPriority,
+        wantedSetCode: match.wantSetCode,
+        wantedCollectorNumber: match.wantCollectorNumber,
+        seen: new Set(),
+        listNames: new Set(),
+      };
+      groups.set(match.wantKey, group);
     }
+
+    group.quantityWanted = Math.max(group.quantityWanted, match.wantQuantity);
+    group.priority = Math.max(group.priority ?? 0, match.wantPriority);
+    group.listNames.add(match.listName);
+    // A printing named on any list is better than none named at all.
+    if (!group.wantedSetCode && match.wantSetCode) {
+      group.wantedSetCode = match.wantSetCode;
+      group.wantedCollectorNumber = match.wantCollectorNumber;
+    }
+
+    // One row per physical collection entry: the same copy comes back once
+    // per list that wanted it, and counting it twice would invent cards.
+    if (group.seen.has(match.cardId)) continue;
+    group.seen.add(match.cardId);
 
     const printing = cards.get(identifierKey(identifierFor(match))) ?? null;
     const { price, approximate } = printing
@@ -78,7 +118,15 @@ function groupByWant(matches: WantMatch[], cards: Map<string, ResolvedCard>): Wa
     } satisfies PricedCopy);
   }
 
-  return [...groups.values()];
+  return [...groups.values()].map((group) => ({
+    name: group.name,
+    quantityWanted: group.quantityWanted,
+    copies: group.copies,
+    priority: group.priority,
+    wantedSetCode: group.wantedSetCode,
+    wantedCollectorNumber: group.wantedCollectorNumber,
+    lists: [...group.listNames].sort((a, b) => a.localeCompare(b)),
+  }));
 }
 
 /**
@@ -132,6 +180,7 @@ export async function buildTradeReport(
       totalCards:
         theyHave.reduce((sum, card) => sum + card.quantityMatched, 0) +
         youHave.reduce((sum, card) => sum + card.quantityMatched, 0),
+      evenUp: suggestEvenUp(youHave, theyHave),
     });
   }
 
@@ -146,4 +195,4 @@ export async function buildTradeReport(
   };
 }
 
-export type { TradeCard, TradeCopy } from "./tradeMath";
+export type { EvenUpDrop, EvenUpSuggestion, TradeCard, TradeCopy } from "./tradeMath";

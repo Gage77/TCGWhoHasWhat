@@ -20,11 +20,10 @@ import {
 } from "./deckbox-parse";
 import { normalizeName } from "./normalize";
 import { getSetCodeIndex } from "./scryfall";
+import { userAgent } from "./userAgent";
 
 export * from "./deckbox-parse";
 
-const USER_AGENT =
-  "TCGWhoHasWhat/0.1 (collection comparison for a private playgroup; +https://github.com/Gage77/TCGWhoHasWhat)";
 const CONCURRENCY = 4;
 
 export interface DeckboxImport {
@@ -38,7 +37,7 @@ export interface DeckboxImport {
 
 async function fetchPage(url: string): Promise<string> {
   const response = await fetch(url, {
-    headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+    headers: { "User-Agent": userAgent(), Accept: "text/html" },
     redirect: "follow",
   });
   if (!response.ok) {

@@ -1,14 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
+import { AddToWantList } from "@/components/AddToWantList";
 import { CollectionsPanel } from "@/components/CollectionsPanel";
 import { ResultsTable } from "@/components/ResultsTable";
+import { Tour, TourButton } from "@/components/Tour";
 import { TradesPanel } from "@/components/TradesPanel";
 import type { Owner } from "@/lib/db";
 import { money } from "@/lib/format";
 import type { SearchResponse } from "@/lib/search";
+import { TOUR_STEPS, selectorFor, type TourStep } from "@/lib/tour";
 
 type Tab = "search" | "trades";
 
@@ -17,6 +20,52 @@ const PLACEHOLDER = `Sol Ring
 Rhystic Study
 Smothering Tithe`;
 
+const IDENTITY_KEY = "who-has-what:me";
+
+/** The remembered identity, kept in localStorage and shared across tabs. */
+const identityStore = {
+  listeners: new Set<() => void>(),
+
+  subscribe(listener: () => void) {
+    identityStore.listeners.add(listener);
+    // Another tab switching person should not leave this one out of date.
+    window.addEventListener("storage", listener);
+    return () => {
+      identityStore.listeners.delete(listener);
+      window.removeEventListener("storage", listener);
+    };
+  },
+
+  read(): string {
+    return window.localStorage.getItem(IDENTITY_KEY) ?? "";
+  },
+
+  write(id: string) {
+    if (id) window.localStorage.setItem(IDENTITY_KEY, id);
+    else window.localStorage.removeItem(IDENTITY_KEY);
+    for (const listener of identityStore.listeners) listener();
+  },
+};
+
+/**
+ * Who the user is, remembered between visits.
+ *
+ * Both halves of the app need it — the search tab to subtract your own
+ * collection, the trades tab to know whose side you are on — so it is asked
+ * once, at the top, rather than separately on each tab.
+ *
+ * Read through `useSyncExternalStore` because that is what localStorage is:
+ * the server render has nobody chosen, and the value arrives on hydration
+ * without a render-then-correct flicker.
+ */
+function useIdentity(owners: Owner[]): [string, (id: string) => void] {
+  const stored = useSyncExternalStore(identityStore.subscribe, identityStore.read, () => "");
+
+  // A remembered collection can be removed out from under the choice.
+  const meId = owners.some((owner) => owner.id === stored) ? stored : "";
+  return [meId, identityStore.write];
+}
+
 /**
  * Owners are rendered from server props rather than client state, so an
  * upload just refreshes the route and the list comes back updated.
@@ -24,19 +73,59 @@ Smothering Tithe`;
 export function Dashboard({
   owners,
   wantCounts,
+  gated,
 }: {
   owners: Owner[];
   wantCounts: Record<string, number>;
+  /** True when a group passphrase is configured, so signing out means something. */
+  gated: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("search");
+  const [meId, setMeId] = useIdentity(owners);
   const [list, setList] = useState("");
-  /** When set, the list is treated as a decklist and this person's collection is subtracted. */
-  const [deckOwnerId, setDeckOwnerId] = useState("");
+  /** Treat the list as a decklist and subtract your own collection from it. */
+  const [deckMode, setDeckMode] = useState(false);
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [tradeableOnly, setTradeableOnly] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Index into `tourSteps`, or null when the tour is not running. */
+  const [tourStep, setTourStep] = useState<number | null>(null);
+  /** The steps this run will actually show, settled when the tour starts. */
+  const [tourSteps, setTourSteps] = useState<TourStep[]>([]);
+
+  const deckOwnerId = deckMode && meId ? meId : "";
+
+  /**
+   * Work out which steps this run will show, then start.
+   *
+   * Results and trade offers only exist once there is something to show, so
+   * those steps are dropped up front rather than skipped as we go — otherwise
+   * the counter reads "7 of 15" and then jumps to 11, which looks broken.
+   */
+  function startTour() {
+    const plan = TOUR_STEPS.filter(
+      (step) =>
+        !step.skipIfMissing ||
+        (step.target !== null && document.querySelector(selectorFor(step.target)) !== null),
+    );
+
+    setTourSteps(plan);
+    if (plan[0]?.tab) setTab(plan[0].tab);
+    setTourStep(plan.length > 0 ? 0 : null);
+  }
+
+  function goToTourStep(next: number) {
+    const step = tourSteps[next];
+    if (!step) {
+      setTourStep(null);
+      return;
+    }
+    // The tab has to change before the target can be found.
+    if (step.tab) setTab(step.tab);
+    setTourStep(next);
+  }
 
   async function search(event: React.FormEvent) {
     event.preventDefault();
@@ -62,21 +151,86 @@ export function Dashboard({
   }
 
   const summary = results?.summary;
+  const inDeckMode = Boolean(results?.deckOwnerId);
+
+  // What a search would put on a want list: in deck mode the copies you are
+  // still short, otherwise the whole ask.
+  const wantDrafts = (results?.rows ?? [])
+    .map((row) => ({
+      name: row.resolvedName ?? row.query,
+      quantity: inDeckMode ? row.quantityMissing : row.quantityWanted,
+      priority: row.priority,
+      setCode: row.wantedSetCode,
+      collectorNumber: row.wantedCollectorNumber,
+    }))
+    .filter((card) => card.quantity > 0);
 
   return (
     <main className="mx-auto w-full max-w-7xl px-6 py-10">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Who Has What</h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Paste a list of cards and see which of your playgroup&apos;s collections have them.
-        </p>
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Who Has What</h1>
+          <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+            Paste a list of cards and see which of your playgroup&apos;s collections have them.
+          </p>
+        </div>
+
+        <div className="flex items-end gap-3">
+          <div className="pb-1">
+            <TourButton onClick={startTour} />
+          </div>
+
+          {gated && (
+            <button
+              data-tour="sign-out"
+              onClick={async () => {
+                await fetch("/api/session", { method: "DELETE" });
+                router.refresh();
+              }}
+              className="pb-2 text-xs text-zinc-500 underline-offset-2 transition hover:text-zinc-700 hover:underline dark:hover:text-zinc-300"
+            >
+              Sign out
+            </button>
+          )}
+
+          {owners.length > 0 && (
+          <div data-tour="identity">
+            <label
+              htmlFor="me"
+              className="block text-xs font-medium text-zinc-600 dark:text-zinc-400"
+            >
+              I am
+            </label>
+            <select
+              id="me"
+              value={meId}
+              onChange={(event) => setMeId(event.target.value)}
+              className="mt-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              <option value="">Nobody in particular</option>
+              {owners.map((owner) => (
+                <option key={owner.id} value={owner.id}>
+                  {owner.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          )}
+        </div>
       </header>
+
+      <Tour
+        steps={tourSteps}
+        index={tourStep}
+        onIndex={goToTourStep}
+        onClose={() => setTourStep(null)}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <CollectionsPanel owners={owners} onChanged={() => router.refresh()} />
 
         <section className="space-y-6">
-          <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
+          <div data-tour="tabs" className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
             {(
               [
                 ["search", "Find cards"],
@@ -97,17 +251,23 @@ export function Dashboard({
             ))}
           </div>
 
-          {tab === "trades" && (
+          {/*
+            * Kept mounted and hidden, like the search tab: unmounting threw
+            * away a trade report the moment you glanced at the other tab.
+            */}
+          <div className={tab === "trades" ? "" : "hidden"}>
             <TradesPanel
               owners={owners}
+              meId={meId}
               wantCounts={wantCounts}
               onWantsChanged={() => router.refresh()}
             />
-          )}
+          </div>
 
           <div className={tab === "search" ? "space-y-6" : "hidden"}>
           <form
             onSubmit={search}
+            data-tour="search-input"
             className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
           >
             <label
@@ -130,31 +290,6 @@ export function Dashboard({
               work.
             </p>
 
-            <div className="mt-4">
-              <label
-                htmlFor="deckowner"
-                className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
-              >
-                Subtract a collection first
-              </label>
-              <select
-                id="deckowner"
-                value={deckOwnerId}
-                onChange={(event) => setDeckOwnerId(event.target.value)}
-                className="mt-1 block rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
-              >
-                <option value="">Don&apos;t subtract — show every card</option>
-                {owners.map((owner) => (
-                  <option key={owner.id} value={owner.id}>
-                    I am {owner.name} — show only what I&apos;m missing
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
-                Paste a decklist and pick yourself to see just the gaps, and who can fill them.
-              </p>
-            </div>
-
             <div className="mt-4 flex flex-wrap items-center gap-4">
               <button
                 type="submit"
@@ -164,7 +299,31 @@ export function Dashboard({
                 {searching ? "Searching…" : "Find these cards"}
               </button>
 
-              <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <label
+                data-tour="deck-mode"
+                className={`flex items-center gap-2 text-sm ${
+                  meId ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-400 dark:text-zinc-600"
+                }`}
+                title={
+                  meId
+                    ? "Paste a decklist to see just the gaps, and who can fill them"
+                    : "Tell the app who you are first"
+                }
+              >
+                <input
+                  type="checkbox"
+                  checked={deckMode && Boolean(meId)}
+                  disabled={!meId}
+                  onChange={(event) => setDeckMode(event.target.checked)}
+                  className="size-4 accent-emerald-600"
+                />
+                Show only what I&apos;m missing
+              </label>
+
+              <label
+                data-tour="tradeable-only"
+                className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
+              >
                 <input
                   type="checkbox"
                   checked={tradeableOnly}
@@ -185,8 +344,11 @@ export function Dashboard({
           </form>
 
           {summary && (
-            <div className="flex flex-wrap gap-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-              {results?.deckOwnerId ? (
+            <div
+              data-tour="results-summary"
+              className="flex flex-wrap gap-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+            >
+              {inDeckMode ? (
                 <>
                   <Stat
                     label="Already own"
@@ -228,7 +390,7 @@ export function Dashboard({
             </div>
           )}
 
-          {results?.deckOwnerId && results.rows.length === 0 && (
+          {inDeckMode && results?.rows.length === 0 && (
             <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
               You already own every card on that list.
             </p>
@@ -240,6 +402,19 @@ export function Dashboard({
             </p>
           )}
 
+          {meId && wantDrafts.length > 0 && (
+            <AddToWantList
+              ownerId={meId}
+              cards={wantDrafts}
+              label={
+                inDeckMode
+                  ? `Add the ${wantDrafts.length} cards you're still missing to a want list`
+                  : `Add these ${wantDrafts.length} cards to a want list`
+              }
+              onChanged={() => router.refresh()}
+            />
+          )}
+
           {results && results.rows.length > 0 && (
             <ResultsTable
               rows={results.rows}
@@ -247,7 +422,7 @@ export function Dashboard({
               // as empty for every remaining card.
               owners={owners.filter((owner) => owner.id !== results.deckOwnerId)}
               tradeableOnly={tradeableOnly}
-              deckMode={Boolean(results.deckOwnerId)}
+              deckMode={inDeckMode}
             />
           )}
           </div>

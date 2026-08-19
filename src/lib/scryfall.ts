@@ -11,9 +11,9 @@
 
 import { readCache, writeCache } from "./db";
 import { normalizeName } from "./normalize";
+import { userAgent } from "./userAgent";
 
 const API = "https://api.scryfall.com";
-const USER_AGENT = "TCGWhoHasWhat/0.1 (+https://github.com/local/tcg-who-has-what)";
 const MIN_REQUEST_GAP_MS = 100;
 const BATCH_SIZE = 75; // Scryfall's documented maximum per collection request.
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // Prices refresh daily upstream.
@@ -136,7 +136,7 @@ async function postCollection(identifiers: CardIdentifier[]): Promise<{
     fetch(`${API}/cards/collection`, {
       method: "POST",
       headers: {
-        "User-Agent": USER_AGENT,
+        "User-Agent": userAgent(),
         Accept: "application/json",
         "Content-Type": "application/json",
       },
@@ -188,7 +188,7 @@ export async function getSetCodeIndex(): Promise<Map<string, string>> {
 
   try {
     const response = await throttle(() =>
-      fetch(`${API}/sets`, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } }),
+      fetch(`${API}/sets`, { headers: { "User-Agent": userAgent(), Accept: "application/json" } }),
     );
     if (!response.ok) return new Map();
 
@@ -210,7 +210,7 @@ export async function getSetCodeIndex(): Promise<Map<string, string>> {
 async function fuzzyNamed(name: string): Promise<ScryfallCard | null> {
   const response = await throttle(() =>
     fetch(`${API}/cards/named?fuzzy=${encodeURIComponent(name)}`, {
-      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+      headers: { "User-Agent": userAgent(), Accept: "application/json" },
     }),
   );
   if (!response.ok) return null;

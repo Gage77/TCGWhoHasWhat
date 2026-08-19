@@ -106,7 +106,10 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
   }
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+    <section
+      data-tour="collections"
+      className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+    >
       <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         Collections
       </h2>

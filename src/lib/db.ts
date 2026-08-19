@@ -11,6 +11,7 @@ import { createClient, type Client, type Transaction } from "@libsql/client";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
+import { diffCollections, type CollectionDiff, type CountedCard } from "./collectionDiff";
 import { NO_DATABASE_MESSAGE, isProduction, persistentStorageConfigured } from "./config";
 import type { CollectionCard } from "./csv";
 import { nameKeys, primaryKey } from "./normalize";
@@ -91,6 +92,7 @@ const INDEXES = [
 // them back-filled. SQLite has no "ADD COLUMN IF NOT EXISTS".
 const ADDED_COLUMNS: Array<[string, string]> = [
   ["owners", "source_url TEXT"],
+  ["owners", "source_tracker TEXT"],
   ["want_cards", "list_id TEXT"],
   ["want_cards", "name_key TEXT"],
   ["want_cards", "priority INTEGER NOT NULL DEFAULT 0"],
@@ -294,12 +296,14 @@ export interface Owner {
   updatedAt: string;
   /** Set for link imports, so the collection can be re-fetched later. */
   sourceUrl: string | null;
+  /** Which tracker the export came from, when it could be told. */
+  tracker: string | null;
 }
 
 export async function listOwners(): Promise<Owner[]> {
   const db = await getDb();
   const result = await db.execute(
-    `SELECT id, name, card_count, unique_cards, updated_at, source_url
+    `SELECT id, name, card_count, unique_cards, updated_at, source_url, source_tracker
      FROM owners ORDER BY name COLLATE NOCASE`,
   );
   return result.rows.map((row) => ({
@@ -309,6 +313,7 @@ export async function listOwners(): Promise<Owner[]> {
     uniqueCards: Number(row.unique_cards),
     updatedAt: String(row.updated_at),
     sourceUrl: row.source_url ? String(row.source_url) : null,
+    tracker: row.source_tracker ? String(row.source_tracker) : null,
   }));
 }
 
@@ -325,8 +330,10 @@ export async function getOwner(ownerId: string): Promise<Owner | null> {
 export async function replaceCollection(
   ownerName: string,
   cards: CollectionCard[],
-  sourceUrl: string | null = null,
-): Promise<Owner> {
+  options: { sourceUrl?: string | null; tracker?: string | null } = {},
+): Promise<{ owner: Owner; diff: CollectionDiff }> {
+  const sourceUrl = options.sourceUrl ?? null;
+  const tracker = options.tracker ?? null;
   const name = ownerName.trim();
   const totalCards = cards.reduce((sum, card) => sum + card.quantity, 0);
   const uniqueCards = new Set(cards.map((card) => primaryKey(card.name))).size;
@@ -339,18 +346,24 @@ export async function replaceCollection(
       sql: "SELECT id FROM owners WHERE name = ? COLLATE NOCASE",
       args: [name],
     });
-    const ownerId = existing.rows.length > 0 ? String(existing.rows[0].id) : crypto.randomUUID();
+    const isNewOwner = existing.rows.length === 0;
+    const ownerId = isNewOwner ? String(crypto.randomUUID()) : String(existing.rows[0].id);
+
+    // Read the outgoing collection before it is deleted, so the upload can
+    // report what actually changed rather than just how big the file was.
+    const before = isNewOwner ? null : await countExisting(db, ownerId);
 
     await db.execute({
-      sql: `INSERT INTO owners (id, name, card_count, unique_cards, updated_at, source_url)
-            VALUES (?, ?, ?, ?, ?, ?)
+      sql: `INSERT INTO owners (id, name, card_count, unique_cards, updated_at, source_url, source_tracker)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
               name = excluded.name,
               card_count = excluded.card_count,
               unique_cards = excluded.unique_cards,
               updated_at = excluded.updated_at,
-              source_url = excluded.source_url`,
-      args: [ownerId, name, totalCards, uniqueCards, updatedAt, sourceUrl],
+              source_url = excluded.source_url,
+              source_tracker = excluded.source_tracker`,
+      args: [ownerId, name, totalCards, uniqueCards, updatedAt, sourceUrl, tracker],
     });
 
     await db.execute({ sql: "DELETE FROM collection_cards WHERE owner_id = ?", args: [ownerId] });
@@ -398,8 +411,32 @@ export async function replaceCollection(
       }
     }
 
-    return { id: ownerId, name, cardCount: totalCards, uniqueCards, updatedAt, sourceUrl };
+    return {
+      owner: { id: ownerId, name, cardCount: totalCards, uniqueCards, updatedAt, sourceUrl, tracker },
+      diff: diffCollections(before, cards.map(counted), (card) => primaryKey(card.name)),
+    };
   });
+}
+
+/** The collection as it stands, folded to one entry per card. */
+async function countExisting(db: Executor, ownerId: string): Promise<CountedCard[]> {
+  const result = await db.execute({
+    sql: `SELECT name, quantity, tradelist_quantity FROM collection_cards WHERE owner_id = ?`,
+    args: [ownerId],
+  });
+  return result.rows.map((row) => ({
+    name: String(row.name),
+    quantity: Number(row.quantity),
+    tradelistQuantity: Number(row.tradelist_quantity),
+  }));
+}
+
+function counted(card: CollectionCard): CountedCard {
+  return {
+    name: card.name,
+    quantity: card.quantity,
+    tradelistQuantity: card.tradelistQuantity,
+  };
 }
 
 export async function deleteOwner(ownerId: string): Promise<void> {

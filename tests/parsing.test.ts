@@ -146,3 +146,37 @@ test("the want-list editor's rendering round-trips back to the same want", () =>
   assert.equal(want.setCode, "lci");
   assert.equal(want.collectorNumber, "106");
 });
+
+test("a Moxfield export is recognised as one", () => {
+  const csv = [
+    '"Count","Tradelist Count","Name","Edition","Condition","Language","Foil","Tags",' +
+      '"Last Modified","Collector Number","Alter","Proxy","Purchase Price"',
+    '"1","1","Sol Ring","c21","NM","English","","","2026-08-01","263","False","False","0.00"',
+  ].join("\n");
+  assert.equal(parseCollectionCsv(csv).tracker, "moxfield");
+});
+
+test("Deckbox is not mistaken for Moxfield despite the shared columns", () => {
+  // Both export Count, Tradelist Count and Edition; only Deckbox has a
+  // Printing Id, and only Moxfield has Alter/Proxy.
+  const csv = [
+    '"Count","Tradelist Count","Name","Edition","Card Number","Condition","Language",' +
+      '"Foil","Signed","Artist Proof","Altered Art","Misprint","Promo","Textless",' +
+      '"Printing Id","Press Foil","My Price"',
+    '"1","1","Sol Ring","Commander 2021","263","Near Mint","English","","","","","","","","1","",""',
+  ].join("\n");
+  assert.equal(parseCollectionCsv(csv).tracker, "deckbox");
+});
+
+test("an unrecognised export is left unattributed rather than guessed at", () => {
+  // Wrong export instructions later are worse than none.
+  const csv = 'Name,Quantity\nSol Ring,2';
+  assert.equal(parseCollectionCsv(csv).tracker, null);
+});
+
+test("detection does not stop an unknown export from parsing", () => {
+  const result = parseCollectionCsv('Name,Quantity\nSol Ring,2');
+  assert.equal(result.tracker, null);
+  assert.equal(result.cards.length, 1);
+  assert.equal(result.cards[0].quantity, 2);
+});

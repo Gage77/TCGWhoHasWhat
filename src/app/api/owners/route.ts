@@ -30,12 +30,14 @@ export async function POST(request: Request) {
     let cards: CollectionCard[];
     let ownerName = name;
     let sourceUrl: string | null = null;
+    let tracker: string | null = null;
     const details: Record<string, unknown> = {};
 
     if (url) {
       const result = await fetchDeckboxCollection(url);
       cards = result.cards;
       sourceUrl = url;
+      tracker = "deckbox";
       // Deckbox knows whose collection it is, so a name is optional here.
       ownerName = name || result.suggestedName || "";
       details.pagesFetched = result.pagesFetched;
@@ -46,6 +48,7 @@ export async function POST(request: Request) {
     } else if (file instanceof File && file.size > 0) {
       const parsed = parseCollectionCsv(await file.text());
       cards = parsed.cards;
+      tracker = parsed.tracker;
       details.skipped = parsed.skipped;
       details.matchedColumns = parsed.matchedColumns;
       details.source = "csv";
@@ -66,8 +69,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const owner = await replaceCollection(ownerName, cards, sourceUrl);
-    return NextResponse.json({ owner, ...details });
+    const { owner, diff } = await replaceCollection(ownerName, cards, { sourceUrl, tracker });
+    return NextResponse.json({ owner, diff, ...details });
   } catch (error) {
     return NextResponse.json({ error: message(error) }, { status: 400 });
   }

@@ -23,12 +23,17 @@ export interface CollectionCard {
   scryfallId: string | null;
 }
 
+/** Which tracker an export came from, when the headers give it away. */
+export type Tracker = "moxfield" | "manabox" | "deckbox" | "archidekt";
+
 export interface ParseResult {
   cards: CollectionCard[];
   /** Rows that had no usable card name, reported back to the uploader. */
   skipped: number;
   /** Column headers we recognised, for the upload confirmation message. */
   matchedColumns: string[];
+  /** The tracker this export came from, when it can be told. */
+  tracker: Tracker | null;
 }
 
 /** RFC 4180 parser: handles quoted fields, embedded delimiters and "" escapes. */
@@ -115,6 +120,31 @@ const FIELD_ALIASES: Record<keyof CollectionCard, string[]> = {
   language: ["language", "lang"],
   scryfallId: ["scryfall id", "scryfallid", "scryfall"],
 };
+
+/**
+ * Header combinations only one tracker produces.
+ *
+ * Knowing where an export came from is what lets the app say "export a fresh
+ * one from Moxfield" later instead of "upload a file from somewhere". Each
+ * signature is a column set no other tracker has all of — Deckbox and
+ * Moxfield agree on Count/Tradelist Count/Edition, so the tie is broken on
+ * the columns that are theirs alone. Anything unrecognised stays null rather
+ * than guessing, since wrong instructions are worse than none.
+ */
+const TRACKER_SIGNATURES: Array<[Tracker, string[]]> = [
+  ["manabox", ["manabox id"]],
+  ["moxfield", ["count", "tradelist count", "edition", "alter", "proxy"]],
+  ["deckbox", ["count", "tradelist count", "edition", "printing id"]],
+  ["archidekt", ["edition name", "edition code"]],
+];
+
+export function detectTracker(headers: string[]): Tracker | null {
+  const present = new Set(headers.map(normalizeHeader));
+  for (const [tracker, signature] of TRACKER_SIGNATURES) {
+    if (signature.every((column) => present.has(column))) return tracker;
+  }
+  return null;
+}
 
 function normalizeHeader(header: string): string {
   return header
@@ -235,5 +265,5 @@ export function parseCollectionCsv(text: string): ParseResult {
     .map((field) => headers[columns[field]!])
     .filter(Boolean);
 
-  return { cards, skipped, matchedColumns };
+  return { cards, skipped, matchedColumns, tracker: detectTracker(headers) };
 }

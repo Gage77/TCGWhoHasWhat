@@ -56,12 +56,51 @@ are accepted since the app fetches them server-side.
 ### Why other sites are CSV-only
 
 Deckbox is the only major collection site that serves collections publicly, and its
-robots.txt permits crawling. Moxfield has no public collection API — collections are
-private by default and its endpoints, including the login endpoint, sit behind Cloudflare
-and return 403 to anything that isn't a browser. Archidekt's collection API exchanges an
-account password for a long-lived token, which is not a reasonable thing to ask a
-playgroup for. CSV export needs no credentials at all and carries exact set codes, so it
-stays the primary path.
+robots.txt permits crawling.
+
+**Moxfield can't be imported by link, even from a public binder.** Its robots.txt
+disallows exactly the two paths that would matter:
+
+```
+Disallow: /collection/*
+Disallow: /binders/*
+```
+
+and `api2.moxfield.com/robots.txt` is `Disallow: /` outright. On the wire, public binder
+pages and every API endpoint return a Cloudflare WAF block to anything that isn't a
+browser. There is no published API, approval process or contact route for third-party
+access. So this is a policy answer rather than a technical one: the paths are off-limits
+to automated clients whatever the response code says.
+
+Archidekt's collection API exchanges an account password for a long-lived token, which is
+not a reasonable thing to ask a playgroup for.
+
+CSV export needs no credentials at all and carries exact set codes — and in Moxfield's
+case a **Tradelist Count**, which almost nothing else exports and which the whole "only
+copies marked for trade" feature depends on. It stays the primary path.
+
+### Keeping collections fresh
+
+A CSV collection is only as good as its last export, and a stale one quietly turns into
+bad trade advice — you offer someone a card you traded away in June. So age is shown
+wherever it costs something, not just on the collections list:
+
+- **Collections** — the age turns amber after a fortnight and red after six weeks.
+- **Search results** — a line above the table naming which columns may be out of date.
+- **Trades** — on each offer, for both your collection and theirs.
+
+A fortnight is roughly a play cycle; six weeks means it predates at least one set release.
+
+Re-uploading reports what actually changed rather than just how big the file was —
+`14 new cards, 3 gone, 6 newly up for trade` — because a re-export you can't see the
+result of is one nobody does twice.
+
+**Update** on a CSV collection sets the form up to replace it, and says where that
+tracker keeps its export button. Which tracker an export came from is worked out from its
+column headers, so the instructions are specific: Moxfield gets "⋯ → Export → CSV".
+Exports we can't attribute stay unattributed rather than getting a guess, since wrong
+instructions are worse than none. Deckbox-linked collections keep their **Refresh**
+button and skip all of this.
 
 ## What the want list accepts
 
@@ -233,6 +272,7 @@ Layout:
 | `src/lib/search.ts` | The who-has-what query |
 | `src/lib/deckNeed.ts` | Deck-mode subtraction rules (pure) |
 | `src/lib/tradeMath.ts` | Trade quantity, value and even-up rules (pure) |
+| `src/lib/collectionDiff.ts` | What changed between two uploads of a collection (pure) |
 | `src/lib/trades.ts` | Two-way trade matching between people |
 | `src/lib/db.ts` | libSQL storage, want lists and their migrations |
 | `src/lib/auth.ts` | Session cookie signing and constant-time comparison |

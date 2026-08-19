@@ -26,6 +26,8 @@ import {
 export interface TradePartner {
   ownerId: string;
   ownerName: string;
+  /** When their collection was last uploaded, so the offer can be qualified. */
+  ownerUpdatedAt: string;
   /** Cards they hold that you want. */
   theyHave: TradeCard[];
   /** Cards you hold that they want. */
@@ -42,6 +44,8 @@ export interface TradePartner {
 export interface TradeReport {
   ownerId: string;
   ownerName: string;
+  /** When your own collection was last uploaded. */
+  ownerUpdatedAt: string;
   partners: TradePartner[];
   /** Set when the chosen person has not saved a want list yet. */
   youHaveNoWants: boolean;
@@ -172,6 +176,7 @@ export async function buildTradeReport(
     partners.push({
       ownerId: other.id,
       ownerName: other.name,
+      ownerUpdatedAt: other.updatedAt,
       theyHave,
       youHave,
       theyHaveValue,
@@ -190,6 +195,7 @@ export async function buildTradeReport(
   return {
     ownerId,
     ownerName: me.name,
+    ownerUpdatedAt: me.updatedAt,
     partners,
     youHaveNoWants: iWant.length === 0,
   };

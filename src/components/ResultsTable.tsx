@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { CardPreview } from "@/components/CardPreview";
 import type { Owner } from "@/lib/db";
-import { money } from "@/lib/format";
+import { freshnessOf, money, relativeDate } from "@/lib/format";
 import type { SearchRow } from "@/lib/search";
 
 interface Props {
@@ -52,6 +52,10 @@ function PriceCell({ row }: { row: SearchRow }) {
 export function ResultsTable({ rows, owners, tradeableOnly, deckMode = false }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  // A column of counts looks equally authoritative whether the collection
+  // behind it was uploaded this morning or last spring.
+  const stale = owners.filter((owner) => freshnessOf(owner.updatedAt) !== "fresh");
+
   function toggle(key: string) {
     setExpanded((current) => {
       const next = new Set(current);
@@ -66,6 +70,16 @@ export function ResultsTable({ rows, owners, tradeableOnly, deckMode = false }: 
       data-tour="results-table"
       className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800"
     >
+      {stale.length > 0 && (
+        <p className="border-b border-zinc-200 bg-amber-50/60 px-4 py-2 text-xs text-amber-800 dark:border-zinc-800 dark:bg-amber-950/30 dark:text-amber-300">
+          Counts may be out of date:{" "}
+          {stale
+            .map((owner) => `${owner.name} (${relativeDate(owner.updatedAt)})`)
+            .join(", ")}
+          .
+        </p>
+      )}
+
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
           <tr>

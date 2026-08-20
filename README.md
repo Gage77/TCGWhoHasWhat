@@ -209,13 +209,20 @@ Hovering a card name shows the card. In an expanded row, hovering a printing's s
 tell a showcase or promo version from the regular one before agreeing to a trade. Previews
 appear on the Trades tab too.
 
-Images come from Scryfall's CDN and are loaded only on hover.
+On a touchscreen there is no hover, so **tapping** a card name or set code shows the same
+card in the middle of the screen; tapping again, scrolling, or pressing Escape dismisses it.
+A mouse click is left alone, because a mouse has already seen the card on its way to
+clicking — in the results table that click belongs to the row underneath, which expands.
+Which of the two you get is decided by the `pointerType` of the click rather than guessed
+from the screen width, so a touchscreen laptop behaves correctly either way.
+
+Images come from Scryfall's CDN and are loaded only when a preview opens.
 
 ## The tour
 
 The compass in the top right walks through the whole site: a dark surround with a hole cut
 around whatever is being explained, and a card next to it saying what that part does. It
-switches tabs as it goes, and leaves via Escape, the X, or **Skip tour** at any point.
+switches tabs as it goes, and leaves via Escape, the X, or **Skip** at any point.
 
 Steps that have nothing to point at are dropped before the tour starts rather than skipped
 as it runs — with no search results on screen there is no point explaining the results
@@ -236,7 +243,41 @@ which tab they need, since otherwise the tour looks for an element that is not o
 
 Placement is a pure function in `src/lib/tourPlacement.ts` with its own tests. It is fussier
 than it looks: the collections panel is taller than the space above and below it, so the
-popup has to go beside it rather than off the top of the window.
+popup has to go beside it rather than off the top of the window. Its width and its assumed
+height are arguments rather than constants, so on a narrow screen the popup shrinks to fit
+instead of hanging off the side.
+
+## On a phone
+
+Most of this gets used at a table with a phone in one hand, so the phone layout is not the
+desktop one with smaller margins.
+
+**The results table becomes a list.** A column per person only works while the columns fit;
+past three or four people a 640px-wide table in a horizontal scroller means swiping sideways
+to find out whether anybody has a card. Under `md` the same rows render as a list instead,
+with each holder as a chip — `alex 2`, `jordan 7` — under the card name, and "Nobody has
+this" spelled out where there would otherwise be a row of dots. Rows expand in place exactly
+as they do in the table, and both layouts are built from the same components, so there is
+one place to change what a row says.
+
+**The search comes first.** Stacked, the collections panel would sit between you and the box
+you came to paste into. Once there is at least one collection to search, the order flips on
+small screens and collections drop below the results, which is where you go when you want
+them. With no collections yet the panel leads, because adding one is the only useful thing
+to do.
+
+**Adding a collection is behind a toggle.** It is a once-per-person job and the longest form
+on the page. **Update** on a collection opens it with that person's name already filled in.
+
+**Fields are 16px on small screens.** iOS Safari zooms in on any field it focuses whose text
+is smaller than that, and does not zoom back out — so one tap on the card list would leave
+the whole page magnified. A single unlayered rule in `globals.css` covers every control at
+once; the `text-sm` sizing takes over from `sm` up.
+
+Beyond that: full-width primary buttons and checkbox rows that can be tapped anywhere along,
+a two-column stat block instead of a five-item wrap, a tour popup sized to the screen, and
+each collection's Update/Refresh/Remove buttons on a line of their own rather than squeezed
+in beside a truncated name.
 
 ## Prices
 

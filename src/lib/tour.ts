@@ -44,7 +44,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: "collections",
     tab: "search",
     title: "Start with collections",
-    body: "Everyone's cards live here. Upload a CSV export from Moxfield, ManaBox, Archidekt or Helvault — or paste a public Deckbox link, which adds a Refresh button so you never have to ask for an export again. Re-uploading under the same name replaces that person's collection.",
+    body: "Everyone's cards live here. Add a collection opens the form: upload a CSV export from Moxfield, ManaBox, Archidekt or Helvault, or paste a public Deckbox link, which adds a Refresh button so you never have to ask for an export again. Re-uploading under the same name replaces that person's collection.",
   },
   {
     target: "update-collection",
@@ -100,7 +100,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: "search",
     skipIfMissing: true,
     title: "Who has each one",
-    body: "A column per person, with a count of what they hold. Click any row to expand it and see the exact printings, conditions and prices. Hover a card name to see the card; hover a set code to see that specific printing, which is how you spot a showcase version before agreeing to anything.",
+    body: "A column per person on a wide screen, a list with everyone's counts underneath on a phone. Open any row to see the exact printings, conditions and prices. Hover a card name to see the card — or tap it, on a phone — and do the same to a set code to see that specific printing, which is how you spot a showcase version before agreeing to anything.",
   },
   {
     target: "want-lists",

@@ -56,23 +56,23 @@ export function TradesPanel({ owners, meId, wantCounts, onWantsChanged }: Props)
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex flex-wrap items-center gap-4">
+      <section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <button
             onClick={findTrades}
             disabled={busy}
             data-tour="find-trades"
-            className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
+            className="w-full rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50 sm:w-auto sm:py-2"
           >
             {busy ? "Checking…" : "Find trades"}
           </button>
 
-          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <label className="flex w-full items-center gap-2 py-1 text-sm text-zinc-600 sm:w-auto sm:py-0 dark:text-zinc-400">
             <input
               type="checkbox"
               checked={tradeableOnly}
               onChange={(event) => setTradeableOnly(event.target.checked)}
-              className="size-4 accent-emerald-600"
+              className="size-5 shrink-0 accent-emerald-600 sm:size-4"
             />
             Only copies marked for trade
           </label>
@@ -119,7 +119,7 @@ export function TradesPanel({ owners, meId, wantCounts, onWantsChanged }: Props)
 
 function Notice({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+    <p className="rounded-xl border border-zinc-200 bg-white px-4 py-4 text-sm text-zinc-500 sm:px-5 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
       {children}
     </p>
   );
@@ -134,7 +134,7 @@ function PartnerCard({ partner, youName }: { partner: TradePartner; youName: str
       data-tour="trade-partner"
       className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
     >
-      <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-zinc-200 px-4 py-4 sm:px-5 dark:border-zinc-800">
         <h3 className="text-lg font-semibold">{partner.ownerName}</h3>
         <p className="text-sm">
           {even ? (
@@ -152,7 +152,7 @@ function PartnerCard({ partner, youName }: { partner: TradePartner; youName: str
       </header>
 
       {freshnessOf(partner.ownerUpdatedAt) !== "fresh" && (
-        <p className="border-b border-zinc-200 px-5 py-2 text-xs text-amber-700 dark:border-zinc-800 dark:text-amber-400">
+        <p className="border-b border-zinc-200 px-4 py-2 text-xs text-amber-700 sm:px-5 dark:border-zinc-800 dark:text-amber-400">
           {partner.ownerName}&apos;s collection was last updated{" "}
           {relativeDate(partner.ownerUpdatedAt)}, so some of these may have moved on.
         </p>
@@ -199,7 +199,7 @@ function EvenUpNote({
   const whose = suggestion.side === "you" ? `${youName} keeps` : `${themName} keeps`;
 
   return (
-    <p className="border-b border-zinc-200 bg-amber-50/70 px-5 py-3 text-sm text-amber-900 dark:border-zinc-800 dark:bg-amber-950/30 dark:text-amber-200">
+    <p className="border-b border-zinc-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 sm:px-5 dark:border-zinc-800 dark:bg-amber-950/30 dark:text-amber-200">
       <span className="font-medium">To even it up:</span> {whose} {cards} — that closes the gap
       from {money(suggestion.balanceBefore)} to {money(suggestion.balanceAfter)}.
     </p>
@@ -216,7 +216,7 @@ function TradeColumn({
   total: number;
 }) {
   return (
-    <div className="bg-white p-5 dark:bg-zinc-900">
+    <div className="bg-white p-4 sm:p-5 dark:bg-zinc-900">
       <div className="flex items-baseline justify-between gap-2">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
           {title}

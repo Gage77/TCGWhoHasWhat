@@ -62,6 +62,13 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
     null,
   );
   const [helpOpen, setHelpOpen] = useState(false);
+  /**
+   * Adding a collection is a once-per-person job, but the form for it is the
+   * longest thing on the page — and on a phone it sits between you and
+   * everything else. It stays out of the way until asked for, except when
+   * there is nothing here yet and it is the only thing worth doing.
+   */
+  const [formOpen, setFormOpen] = useState(owners.length === 0);
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -71,7 +78,12 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
     setName(owner.name);
     setStatus({ kind: "hint", text: updateHint(owner) });
     setHelpOpen(true);
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    setFormOpen(true);
+    // A frame late on purpose: the form may have just been revealed, and has
+    // no position to scroll to until that render has painted.
+    requestAnimationFrame(() =>
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+    );
   }
 
   async function add(event: React.FormEvent) {
@@ -164,7 +176,7 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
   return (
     <section
       data-tour="collections"
-      className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+      className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 dark:border-zinc-800 dark:bg-zinc-900"
     >
       <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         Collections
@@ -177,68 +189,90 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
       ) : (
         <ul className="mt-3 space-y-2">
           {owners.map((owner) => (
-            <li key={owner.id} className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/60">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">{owner.name}</span>
-                    {owner.sourceUrl ? (
-                      <span
-                        className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-normal text-sky-800 dark:bg-sky-950 dark:text-sky-300"
-                        title={owner.sourceUrl}
-                      >
-                        linked
-                      </span>
-                    ) : (
-                      owner.tracker &&
-                      TRACKER_LABELS[owner.tracker] && (
-                        <span className="shrink-0 rounded bg-zinc-200 px-1.5 py-0.5 text-xs font-normal text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-                          {TRACKER_LABELS[owner.tracker]}
-                        </span>
-                      )
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    {owner.cardCount.toLocaleString()} cards ·{" "}
-                    {owner.uniqueCards.toLocaleString()} unique ·{" "}
-                    <span className={AGE_CLASS[freshnessOf(owner.updatedAt)]}>
-                      updated {relativeDate(owner.updatedAt)}
+            <li key={owner.id} className="rounded-lg bg-zinc-50 px-3 py-2.5 dark:bg-zinc-800/60">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="truncate font-medium">{owner.name}</span>
+                  {owner.sourceUrl ? (
+                    <span
+                      className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-normal text-sky-800 dark:bg-sky-950 dark:text-sky-300"
+                      title={owner.sourceUrl}
+                    >
+                      linked
                     </span>
-                  </p>
+                  ) : (
+                    owner.tracker &&
+                    TRACKER_LABELS[owner.tracker] && (
+                      <span className="shrink-0 rounded bg-zinc-200 px-1.5 py-0.5 text-xs font-normal text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                        {TRACKER_LABELS[owner.tracker]}
+                      </span>
+                    )
+                  )}
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {!owner.sourceUrl && (
-                    <button
-                      onClick={() => startUpdate(owner)}
-                      data-tour="update-collection"
-                      className="rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
-                    >
-                      Update
-                    </button>
-                  )}
-                  {owner.sourceUrl && (
-                    <button
-                      onClick={() => refresh(owner)}
-                      disabled={refreshing === owner.id}
-                      className="rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-sky-50 hover:text-sky-600 disabled:opacity-50 dark:hover:bg-sky-950 dark:hover:text-sky-400"
-                    >
-                      {refreshing === owner.id ? "Refreshing…" : "Refresh"}
-                    </button>
-                  )}
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  {owner.cardCount.toLocaleString()} cards ·{" "}
+                  {owner.uniqueCards.toLocaleString()} unique ·{" "}
+                  <span className={AGE_CLASS[freshnessOf(owner.updatedAt)]}>
+                    updated {relativeDate(owner.updatedAt)}
+                  </span>
+                </p>
+              </div>
+
+              {/*
+                * On their own line, right-aligned. Squeezed in beside the name
+                * these were 24px tall in a 280px column at every screen size,
+                * which is a fiddly thing to hit and an expensive thing to miss
+                * when one of them is Remove.
+                */}
+              <div className="-mr-1 mt-1.5 flex flex-wrap justify-end gap-1">
+                {!owner.sourceUrl && (
                   <button
-                    onClick={() => remove(owner)}
-                    className="rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+                    onClick={() => startUpdate(owner)}
+                    data-tour="update-collection"
+                    className="rounded px-2.5 py-1.5 text-xs text-zinc-500 transition hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950 dark:hover:text-emerald-400"
                   >
-                    Remove
+                    Update
                   </button>
-                </div>
+                )}
+                {owner.sourceUrl && (
+                  <button
+                    onClick={() => refresh(owner)}
+                    disabled={refreshing === owner.id}
+                    className="rounded px-2.5 py-1.5 text-xs text-zinc-500 transition hover:bg-sky-50 hover:text-sky-600 disabled:opacity-50 dark:hover:bg-sky-950 dark:hover:text-sky-400"
+                  >
+                    {refreshing === owner.id ? "Refreshing…" : "Refresh"}
+                  </button>
+                )}
+                <button
+                  onClick={() => remove(owner)}
+                  className="rounded px-2.5 py-1.5 text-xs text-zinc-500 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+                >
+                  Remove
+                </button>
               </div>
             </li>
           ))}
         </ul>
       )}
 
-      <form ref={formRef} onSubmit={add} className="mt-5 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+      {owners.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setFormOpen((open) => !open)}
+          aria-expanded={formOpen}
+          className="mt-4 w-full rounded-lg border border-dashed border-zinc-300 px-3 py-2.5 text-sm text-zinc-600 transition hover:border-emerald-500 hover:text-emerald-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+        >
+          {formOpen ? "Done adding" : "Add a collection"}
+        </button>
+      )}
+
+      <form
+        ref={formRef}
+        onSubmit={add}
+        className={`mt-5 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800 ${
+          formOpen ? "" : "hidden"
+        }`}
+      >
         <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
           {(["csv", "link"] as const).map((option) => (
             <button
@@ -248,7 +282,7 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
                 setSource(option);
                 setStatus(null);
               }}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
                 source === option
                   ? "bg-white shadow-sm dark:bg-zinc-950"
                   : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
@@ -283,8 +317,8 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,.tsv,.txt,text/csv"
-              className="mt-1 w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-zinc-200 dark:file:bg-zinc-800 dark:hover:file:bg-zinc-700"
+              accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain,application/csv,application/vnd.ms-excel"
+              className="mt-1 w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2.5 file:text-sm file:font-medium hover:file:bg-zinc-200 dark:file:bg-zinc-800 dark:hover:file:bg-zinc-700"
             />
           </div>
         ) : (
@@ -308,7 +342,7 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
+          className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50 sm:py-2"
         >
           {busy ? "Working…" : "Add collection"}
         </button>
@@ -333,7 +367,7 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
         onToggle={(event) => setHelpOpen(event.currentTarget.open)}
         className="mt-4 text-xs text-zinc-500 dark:text-zinc-400"
       >
-        <summary className="cursor-pointer font-medium">Where do I get these?</summary>
+        <summary className="cursor-pointer py-1 font-medium">Where do I get these?</summary>
         <p className="mt-2 font-medium">Moxfield, ManaBox, Archidekt, Helvault (CSV)</p>
         <ol className="mt-1 list-decimal space-y-1 pl-4">
           <li>Open your collection.</li>

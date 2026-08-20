@@ -151,7 +151,7 @@ export function WantLists({ ownerId, ownerName, onChanged }: Props) {
           value={editing.name}
           onChange={(event) => setEditing({ ...editing, name: event.target.value })}
           placeholder="e.g. Atraxa upgrades"
-          className="mt-1 w-full max-w-xs rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
+          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 sm:max-w-xs dark:border-zinc-700 dark:bg-zinc-950"
         />
 
         <label
@@ -174,17 +174,17 @@ export function WantLists({ ownerId, ownerName, onChanged }: Props) {
           <code>(LCI) 106</code> — records which version you are after.
         </p>
 
-        <div className="mt-2 flex gap-2">
+        <div className="mt-3 flex gap-2">
           <button
             onClick={save}
             disabled={busy}
-            className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
+            className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50 sm:flex-none sm:py-1.5"
           >
             {busy ? "Saving…" : "Save list"}
           </button>
           <button
             onClick={() => setEditing(null)}
-            className="rounded-lg px-4 py-1.5 text-sm text-zinc-500 transition hover:text-zinc-700 dark:hover:text-zinc-300"
+            className="flex-1 rounded-lg border border-zinc-300 px-4 py-2.5 text-sm text-zinc-500 transition hover:text-zinc-700 sm:flex-none sm:border-0 sm:py-1.5 dark:border-zinc-700 dark:hover:text-zinc-300"
           >
             Cancel
           </button>
@@ -205,7 +205,7 @@ export function WantLists({ ownerId, ownerName, onChanged }: Props) {
         </p>
         <button
           onClick={() => setEditing({ id: null, name: "", text: "" })}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          className="rounded-lg border border-zinc-300 px-3 py-2 text-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
         >
           New list
         </button>
@@ -227,7 +227,7 @@ export function WantLists({ ownerId, ownerName, onChanged }: Props) {
                     {priorities > 0 && ` · ${priorities} priority`}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-1">
+                <div className="-mr-1 flex shrink-0 gap-1">
                   <button
                     onClick={() =>
                       setEditing({
@@ -236,13 +236,13 @@ export function WantLists({ ownerId, ownerName, onChanged }: Props) {
                         text: list.cards.map(toLine).join("\n"),
                       })
                     }
-                    className="rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                    className="rounded px-2.5 py-1.5 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => remove(list)}
-                    className="rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+                    className="rounded px-2.5 py-1.5 text-xs text-zinc-500 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
                   >
                     Delete
                   </button>

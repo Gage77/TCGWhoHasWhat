@@ -166,19 +166,23 @@ export function Dashboard({
     .filter((card) => card.quantity > 0);
 
   return (
-    <main className="mx-auto w-full max-w-7xl px-6 py-10">
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Who Has What</h1>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+    <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
+      {/*
+        * One row on a desktop. On a phone the title and the two icon-sized
+        * controls keep the first line and the identity picker wraps below at
+        * full width, where it is a comfortable thing to tap rather than a
+        * dropdown squeezed into a corner.
+        */}
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-3 gap-y-4 sm:mb-8">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Who Has What</h1>
+          <p className="mt-1 text-sm text-zinc-600 sm:text-base dark:text-zinc-400">
             Paste a list of cards and see which of your playgroup&apos;s collections have them.
           </p>
         </div>
 
-        <div className="flex items-end gap-3">
-          <div className="pb-1">
-            <TourButton onClick={startTour} />
-          </div>
+        <div className="flex shrink-0 items-center gap-1 self-start sm:self-end sm:pb-1">
+          <TourButton onClick={startTour} />
 
           {gated && (
             <button
@@ -187,14 +191,15 @@ export function Dashboard({
                 await fetch("/api/session", { method: "DELETE" });
                 router.refresh();
               }}
-              className="pb-2 text-xs text-zinc-500 underline-offset-2 transition hover:text-zinc-700 hover:underline dark:hover:text-zinc-300"
+              className="rounded-lg px-2 py-2 text-xs text-zinc-500 underline-offset-2 transition hover:text-zinc-700 hover:underline dark:hover:text-zinc-300"
             >
               Sign out
             </button>
           )}
+        </div>
 
-          {owners.length > 0 && (
-          <div data-tour="identity">
+        {owners.length > 0 && (
+          <div data-tour="identity" className="w-full sm:w-auto">
             <label
               htmlFor="me"
               className="block text-xs font-medium text-zinc-600 dark:text-zinc-400"
@@ -205,7 +210,7 @@ export function Dashboard({
               id="me"
               value={meId}
               onChange={(event) => setMeId(event.target.value)}
-              className="mt-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 sm:w-auto dark:border-zinc-700 dark:bg-zinc-950"
             >
               <option value="">Nobody in particular</option>
               {owners.map((owner) => (
@@ -215,8 +220,7 @@ export function Dashboard({
               ))}
             </select>
           </div>
-          )}
-        </div>
+        )}
       </header>
 
       <Tour
@@ -226,10 +230,18 @@ export function Dashboard({
         onClose={() => setTourStep(null)}
       />
 
+      {/*
+        * Side by side on a desktop, stacked on a phone — and once there are
+        * collections to search, the search goes first. Managing collections is
+        * something you do once; scrolling past the whole panel to reach the
+        * box you came for is something you would do every visit.
+        */}
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        <CollectionsPanel owners={owners} onChanged={() => router.refresh()} />
+        <div className={owners.length === 0 ? undefined : "order-2 lg:order-1"}>
+          <CollectionsPanel owners={owners} onChanged={() => router.refresh()} />
+        </div>
 
-        <section className="space-y-6">
+        <section className={`space-y-6 ${owners.length === 0 ? "" : "order-1 lg:order-2"}`}>
           <div data-tour="tabs" className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
             {(
               [
@@ -240,7 +252,7 @@ export function Dashboard({
               <button
                 key={value}
                 onClick={() => setTab(value)}
-                className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
+                className={`flex-1 rounded-md px-3 py-2.5 text-sm font-medium transition sm:px-4 sm:py-2 ${
                   tab === value
                     ? "bg-white shadow-sm dark:bg-zinc-950"
                     : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
@@ -268,7 +280,7 @@ export function Dashboard({
           <form
             onSubmit={search}
             data-tour="search-input"
-            className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+            className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 dark:border-zinc-800 dark:bg-zinc-900"
           >
             <label
               htmlFor="wantlist"
@@ -290,18 +302,22 @@ export function Dashboard({
               work.
             </p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-4">
+            {/*
+              * Stacked on a phone, so each checkbox gets a full-width row to
+              * be tapped anywhere along rather than a 16px box to hit.
+              */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
               <button
                 type="submit"
                 disabled={searching || owners.length === 0}
-                className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                className="w-full rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50 sm:w-auto sm:py-2"
               >
                 {searching ? "Searching…" : "Find these cards"}
               </button>
 
               <label
                 data-tour="deck-mode"
-                className={`flex items-center gap-2 text-sm ${
+                className={`flex w-full items-center gap-2 py-1 text-sm sm:w-auto sm:py-0 ${
                   meId ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-400 dark:text-zinc-600"
                 }`}
                 title={
@@ -315,20 +331,20 @@ export function Dashboard({
                   checked={deckMode && Boolean(meId)}
                   disabled={!meId}
                   onChange={(event) => setDeckMode(event.target.checked)}
-                  className="size-4 accent-emerald-600"
+                  className="size-5 shrink-0 accent-emerald-600 sm:size-4"
                 />
                 Show only what I&apos;m missing
               </label>
 
               <label
                 data-tour="tradeable-only"
-                className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
+                className="flex w-full items-center gap-2 py-1 text-sm text-zinc-600 sm:w-auto sm:py-0 dark:text-zinc-400"
               >
                 <input
                   type="checkbox"
                   checked={tradeableOnly}
                   onChange={(event) => setTradeableOnly(event.target.checked)}
-                  className="size-4 accent-emerald-600"
+                  className="size-5 shrink-0 accent-emerald-600 sm:size-4"
                 />
                 Only count copies marked for trade
               </label>
@@ -346,7 +362,7 @@ export function Dashboard({
           {summary && (
             <div
               data-tour="results-summary"
-              className="flex flex-wrap gap-6 rounded-xl border border-zinc-200 bg-white px-5 py-4 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+              className="grid grid-cols-2 gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-4 text-sm sm:flex sm:flex-wrap sm:gap-6 sm:px-5 dark:border-zinc-800 dark:bg-zinc-900"
             >
               {inDeckMode ? (
                 <>

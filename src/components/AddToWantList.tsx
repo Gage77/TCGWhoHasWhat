@@ -125,7 +125,7 @@ export function AddToWantList({ ownerId, cards, label, onChanged }: Props) {
   return (
     <div
       data-tour="add-to-want-list"
-      className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-900 dark:bg-emerald-950/30"
+      className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-4 sm:px-5 dark:border-emerald-900 dark:bg-emerald-950/30"
     >
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
@@ -135,7 +135,7 @@ export function AddToWantList({ ownerId, cards, label, onChanged }: Props) {
         <select
           value={target}
           onChange={(event) => setTarget(event.target.value)}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
+          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 sm:w-auto sm:py-1.5 dark:border-zinc-700 dark:bg-zinc-950"
         >
           {lists.map((list) => (
             <option key={list.id} value={list.id}>
@@ -150,14 +150,14 @@ export function AddToWantList({ ownerId, cards, label, onChanged }: Props) {
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="e.g. Atraxa upgrades"
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-emerald-500 dark:border-zinc-700 dark:bg-zinc-950"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500 sm:w-auto sm:py-1.5 dark:border-zinc-700 dark:bg-zinc-950"
           />
         )}
 
         <button
           onClick={add}
           disabled={busy}
-          className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
+          className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50 sm:w-auto sm:py-1.5"
         >
           {busy ? "Saving…" : "Add to want list"}
         </button>

@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { selectorFor, type TourStep } from "@/lib/tour";
-import { POPUP_WIDTH, placePopup, type Box } from "@/lib/tourPlacement";
+import {
+  NOMINAL_HEIGHT,
+  POPUP_WIDTH,
+  placePopup,
+  type Box,
+  type Viewport,
+} from "@/lib/tourPlacement";
 
 interface Props {
   steps: TourStep[];
@@ -37,6 +43,11 @@ function boxOf(element: HTMLElement): Box {
  */
 export function Tour({ steps, index, onIndex, onClose }: Props) {
   const [box, setBox] = useState<Box | null>(null);
+  // Measured rather than read at render time so that rotating a phone, or the
+  // address bar sliding away under a scroll, moves the popup with it.
+  const [viewport, setViewport] = useState<Viewport | null>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
   const running = index !== null;
   const step = running ? steps[index] : undefined;
   const target = step?.target ?? null;
@@ -49,6 +60,7 @@ export function Tour({ steps, index, onIndex, onClose }: Props) {
 
     let frame = 0;
     const measure = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
       const element = target
         ? document.querySelector<HTMLElement>(selectorFor(target))
         : null;
@@ -72,6 +84,19 @@ export function Tour({ steps, index, onIndex, onClose }: Props) {
     };
   }, [running, target]);
 
+  /**
+   * Start each step at its own beginning, with the focus on Next.
+   *
+   * `autoFocus` would do the focusing, but it scrolls what it focuses into
+   * view — and on a short screen the popup is a scrolling box with Next at
+   * the bottom, so the step arrived already scrolled past its own title.
+   */
+  useEffect(() => {
+    if (!running) return;
+    popupRef.current?.scrollTo({ top: 0 });
+    nextRef.current?.focus({ preventScroll: true });
+  }, [running, index]);
+
   useEffect(() => {
     if (!running) return;
 
@@ -89,7 +114,16 @@ export function Tour({ steps, index, onIndex, onClose }: Props) {
 
   const isLast = index === steps.length - 1;
 
-  const placement = placePopup(box, { width: window.innerWidth, height: window.innerHeight });
+  // The effect has not run on the very first frame; by then we are certainly
+  // in a browser, so measuring inline for that one render is safe.
+  const size = viewport ?? { width: window.innerWidth, height: window.innerHeight };
+  // A fixed 340px popup hangs off the side of a narrow phone, and 260px of
+  // assumed height is most of a phone screen — both are ceilings here, not
+  // sizes.
+  const popupWidth = Math.min(POPUP_WIDTH, size.width - MARGIN * 2);
+  const nominalHeight = Math.min(NOMINAL_HEIGHT, Math.round(size.height * 0.45));
+
+  const placement = placePopup(box, size, popupWidth, nominalHeight);
   const position: React.CSSProperties =
     placement.side === "center"
       ? { left: "50%", top: "50%", transform: "translate(-50%, -50%)", maxHeight: placement.maxHeight }
@@ -122,11 +156,12 @@ export function Tour({ steps, index, onIndex, onClose }: Props) {
       )}
 
       <div
+        ref={popupRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="tour-title"
-        className="fixed z-50 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
-        style={{ width: POPUP_WIDTH, ...position }}
+        className="fixed z-50 overflow-y-auto overscroll-contain rounded-xl border border-zinc-200 bg-white p-4 shadow-2xl sm:p-5 dark:border-zinc-700 dark:bg-zinc-900"
+        style={{ width: popupWidth, ...position }}
       >
         <div className="flex items-start justify-between gap-3">
           <h2 id="tour-title" className="text-base font-semibold">
@@ -145,31 +180,31 @@ export function Tour({ steps, index, onIndex, onClose }: Props) {
 
         <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{step.body}</p>
 
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <span className="text-xs tabular-nums text-zinc-400 dark:text-zinc-500">
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <span className="shrink-0 text-xs tabular-nums text-zinc-400 dark:text-zinc-500">
             {index + 1} of {steps.length}
           </span>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={onClose}
-              className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 transition hover:text-zinc-700 dark:hover:text-zinc-300"
+              className="rounded-lg px-2.5 py-2 text-sm whitespace-nowrap text-zinc-500 transition hover:text-zinc-700 sm:px-3 sm:py-1.5 dark:hover:text-zinc-300"
             >
-              {isLast ? "Close" : "Skip tour"}
+              {isLast ? "Close" : "Skip"}
             </button>
             {index > 0 && (
               <button
                 onClick={() => onIndex(index - 1)}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm transition hover:bg-zinc-50 sm:py-1.5 dark:border-zinc-700 dark:hover:bg-zinc-800"
               >
                 Back
               </button>
             )}
             {!isLast && (
               <button
+                ref={nextRef}
                 onClick={() => onIndex(index + 1)}
-                autoFocus
-                className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-500"
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 sm:py-1.5"
               >
                 Next
               </button>
@@ -189,7 +224,7 @@ export function TourButton({ onClick }: { onClick: () => void }) {
       data-tour="tour-button"
       title="Show me around"
       aria-label="Show me around"
-      className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 hover:text-emerald-600 dark:hover:bg-zinc-800 dark:hover:text-emerald-400"
+      className="rounded-lg p-2.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-emerald-600 sm:p-2 dark:hover:bg-zinc-800 dark:hover:text-emerald-400"
     >
       <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8">
         <circle cx="12" cy="12" r="9" />

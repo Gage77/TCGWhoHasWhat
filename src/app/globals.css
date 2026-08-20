@@ -23,4 +23,24 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  /* Landscape on iOS otherwise inflates body text without touching the layout. */
+  -webkit-text-size-adjust: 100%;
+}
+
+/*
+ * iOS Safari zooms in on any field it focuses whose text is under 16px, and
+ * does not zoom back out afterwards — so tapping the card list would leave the
+ * whole page magnified. Every control here is `text-sm`, so rather than
+ * special-casing a dozen classNames, phones get 16px fields and the Tailwind
+ * sizes take over from the `sm` breakpoint up.
+ *
+ * Deliberately unlayered: unlayered rules outrank everything Tailwind puts in
+ * its layers, so this beats the `text-sm` utility without an `!important`.
+ */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

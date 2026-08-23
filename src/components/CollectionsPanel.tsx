@@ -66,12 +66,20 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
   /**
    * Adding a collection is a once-per-person job, but the form for it is the
    * longest thing on the page — and on a phone it sits between you and
-   * everything else. It stays out of the way until asked for, except when
-   * there is nothing here yet and it is the only thing worth doing.
+   * everything else. It stays out of the way until asked for.
    */
-  const [formOpen, setFormOpen] = useState(owners.length === 0);
+  const [formOpen, setFormOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+
+  /**
+   * With nothing here yet, the form is the only thing worth doing, so it is
+   * always open — and the toggle that would hide it is not drawn. Derived
+   * rather than seeded into state on mount, because removing the last
+   * collection has to reopen it too: otherwise the toggle disappears with the
+   * list while the form stays hidden, and there is no way to add anything.
+   */
+  const showForm = formOpen || owners.length === 0;
 
   /** Set the form up to replace one person's collection. */
   function startUpdate(owner: Owner) {
@@ -134,6 +142,9 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
         setName("");
         setUrl("");
         if (fileRef.current) fileRef.current.value = "";
+        // Adding the first collection draws the toggle for the first time; stay
+        // open so what just loaded is still readable underneath it.
+        setFormOpen(true);
         onChanged();
       }
     } catch {
@@ -278,7 +289,7 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
         ref={formRef}
         onSubmit={add}
         className={`mt-5 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800 ${
-          formOpen ? "" : "hidden"
+          showForm ? "" : "hidden"
         }`}
       >
         <div className="flex gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">

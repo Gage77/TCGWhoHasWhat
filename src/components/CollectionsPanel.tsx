@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { describeDiff, type CollectionDiff } from "@/lib/collectionDiff";
 import type { Owner } from "@/lib/db";
+import { matchOwnerName, pickDroppedFile } from "@/lib/fileDrop";
 import { freshnessOf, relativeDate } from "@/lib/format";
 
 interface Props {
@@ -44,6 +45,18 @@ const AGE_CLASS: Record<string, string> = {
   stale: "text-red-600 dark:text-red-400",
 };
 
+/** A dragged thing worth catching, as opposed to selected text or a link. */
+function carriesFiles(transfer: DataTransfer | null): boolean {
+  return Array.from(transfer?.types ?? []).includes("Files");
+}
+
+/** Roughly how big, so a wrong file is recognisable before it is uploaded. */
+function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 /** The upload result in one line, including what changed. */
 function loadedMessage(name: string, cardCount: number, extra: string, diff?: CollectionDiff) {
   const change = diff ? describeDiff(diff) : null;
@@ -69,8 +82,16 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
    * everything else. It stays out of the way until asked for.
    */
   const [formOpen, setFormOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  /**
+   * Depth rather than a flag: dragenter and dragleave fire for every element
+   * the pointer crosses inside the panel, so a single boolean flickers off
+   * the moment the file passes over a button on its way to the middle.
+   */
+  const dragDepth = useRef(0);
 
   /**
    * With nothing here yet, the form is the only thing worth doing, so it is
@@ -81,6 +102,100 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
    */
   const showForm = formOpen || owners.length === 0;
 
+  /**
+   * Opening the form from somewhere else — Update, or a dropped file — has to
+   * wait for it to exist before it can be scrolled to or typed in. An effect
+   * rather than something done alongside the click, because at that point the
+   * form is still display:none, and nothing scrolls to a hidden element or
+   * takes focus from one. A fresh object every time, so asking twice works.
+   */
+  const [reveal, setReveal] = useState<{ focusName: boolean } | null>(null);
+  useEffect(() => {
+    if (!reveal) return;
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (reveal.focusName) nameRef.current?.focus();
+  }, [reveal]);
+
+  /**
+   * A file dropped anywhere else on the page is a file the browser opens,
+   * replacing the app with a wall of CSV and losing whatever was typed. Only
+   * file drags are swallowed, so dragging text into the search box still
+   * works as it always did.
+   */
+  useEffect(() => {
+    function swallow(event: DragEvent) {
+      if (carriesFiles(event.dataTransfer)) event.preventDefault();
+    }
+    window.addEventListener("dragover", swallow);
+    window.addEventListener("drop", swallow);
+    return () => {
+      window.removeEventListener("dragover", swallow);
+      window.removeEventListener("drop", swallow);
+    };
+  }, []);
+
+  /**
+   * Take a file, however it arrived — dropped on the panel or chosen from the
+   * dialog, which go through here alike so that both get the same complaints
+   * and the same guess at whose collection it is.
+   */
+  function acceptFiles(files: File[]) {
+    const picked = pickDroppedFile(files);
+    setFormOpen(true);
+
+    if (!picked.ok) {
+      setStatus({ kind: "error", text: picked.error });
+      return;
+    }
+
+    setSource("csv");
+    setFile(picked.file);
+
+    // Only ever a suggestion, and never over something already typed: the
+    // name decides whose collection gets replaced.
+    const guess = name.trim()
+      ? null
+      : matchOwnerName(picked.file.name, owners.map((owner) => owner.name));
+    if (guess) {
+      setName(guess);
+      setStatus({ kind: "hint", text: `Looks like ${guess}'s — adding this replaces their collection.` });
+    } else {
+      setStatus(null);
+    }
+
+    // Whoever it belongs to is the one thing left to say, so that is where
+    // the cursor goes — unless the name is already answered.
+    setReveal({ focusName: !guess && !name.trim() });
+  }
+
+  function onDragEnter(event: React.DragEvent) {
+    if (!carriesFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    dragDepth.current += 1;
+    setDragging(true);
+  }
+
+  function onDragOver(event: React.DragEvent) {
+    if (!carriesFiles(event.dataTransfer)) return;
+    // Without this the panel is not a drop target at all, whatever it looks like.
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function onDragLeave(event: React.DragEvent) {
+    if (!carriesFiles(event.dataTransfer)) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  }
+
+  function onDrop(event: React.DragEvent) {
+    if (!carriesFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    acceptFiles(Array.from(event.dataTransfer.files));
+  }
+
   /** Set the form up to replace one person's collection. */
   function startUpdate(owner: Owner) {
     setSource("csv");
@@ -88,20 +203,18 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
     setStatus({ kind: "hint", text: updateHint(owner) });
     setHelpOpen(true);
     setFormOpen(true);
-    // A frame late on purpose: the form may have just been revealed, and has
-    // no position to scroll to until that render has painted.
-    requestAnimationFrame(() =>
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
-    );
+    // The name is already filled in here, so nothing needs the cursor.
+    setReveal({ focusName: false });
   }
 
   async function add(event: React.FormEvent) {
     event.preventDefault();
-    const file = fileRef.current?.files?.[0];
 
     if (source === "csv") {
       if (!name.trim()) return setStatus({ kind: "error", text: "Add a name first." });
-      if (!file) return setStatus({ kind: "error", text: "Choose a CSV export." });
+      if (!file) {
+        return setStatus({ kind: "error", text: "Drop a CSV export in, or choose one." });
+      }
     } else if (!url.trim()) {
       return setStatus({ kind: "error", text: "Paste a Deckbox collection link." });
     }
@@ -141,7 +254,7 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
         });
         setName("");
         setUrl("");
-        if (fileRef.current) fileRef.current.value = "";
+        setFile(null);
         // Adding the first collection draws the toggle for the first time; stay
         // open so what just loaded is still readable underneath it.
         setFormOpen(true);
@@ -188,10 +301,22 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
   return (
     <section
       data-tour="collections"
-      className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 dark:border-zinc-800 dark:bg-zinc-900"
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={`rounded-xl border bg-white p-4 transition sm:p-5 dark:bg-zinc-900 ${
+        dragging
+          ? "border-emerald-500 ring-2 ring-emerald-500/40"
+          : "border-zinc-200 dark:border-zinc-800"
+      }`}
     >
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+      <h2 className="flex items-baseline justify-between gap-2 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         Collections
+        {/* Said up here because the form it lands in may still be collapsed. */}
+        {dragging && (
+          <span className="text-emerald-600 dark:text-emerald-400">Drop to add</span>
+        )}
       </h2>
 
       {owners.length === 0 ? (
@@ -318,6 +443,7 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
             {source === "link" && <span className="font-normal">(optional)</span>}
           </label>
           <input
+            ref={nameRef}
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={source === "link" ? "Taken from Deckbox if blank" : "e.g. Hunter"}
@@ -330,15 +456,62 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
 
         {source === "csv" ? (
           <div>
-            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+            <label
+              htmlFor="collection-file"
+              className="block text-xs font-medium text-zinc-600 dark:text-zinc-400"
+            >
               Collection CSV
             </label>
+            {/*
+              * Off-screen rather than hidden, so it can still be tabbed to and
+              * opened from the keyboard — the dashed area below is its label,
+              * and lights up when it has the focus.
+              */}
             <input
-              ref={fileRef}
+              id="collection-file"
               type="file"
               accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain,application/csv,application/vnd.ms-excel"
-              className="mt-1 w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2.5 file:text-sm file:font-medium hover:file:bg-zinc-200 dark:file:bg-zinc-800 dark:hover:file:bg-zinc-700"
+              onChange={(event) => {
+                acceptFiles(Array.from(event.target.files ?? []));
+                // Emptied on the way out: picking the same file again after a
+                // failed upload is otherwise not a change, and fires nothing.
+                event.target.value = "";
+              }}
+              className="peer sr-only"
             />
+            <label
+              htmlFor="collection-file"
+              className={`mt-1 flex cursor-pointer flex-col items-center gap-0.5 rounded-lg border border-dashed px-3 py-5 text-center text-sm transition peer-focus-visible:border-emerald-500 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500/40 ${
+                dragging
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  : "border-zinc-300 hover:border-emerald-500 dark:border-zinc-700"
+              }`}
+            >
+              {file ? (
+                <>
+                  <span className="w-full truncate font-medium">{file.name}</span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {fileSize(file.size)} · choose another, or drop one in
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">
+                    Drop the export here, or{" "}
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                      choose a file
+                    </span>
+                  </span>
+                  <span className="font-medium text-emerald-600 sm:hidden dark:text-emerald-400">
+                    Choose a file
+                  </span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="hidden sm:inline">Anywhere on this panel works. </span>
+                    CSV, TSV or TXT.
+                  </span>
+                </>
+              )}
+            </label>
           </div>
         ) : (
           <div>

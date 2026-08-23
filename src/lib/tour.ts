@@ -44,7 +44,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: "collections",
     tab: "search",
     title: "Start with collections",
-    body: "Everyone's cards live here. Add a collection opens the form: upload a CSV export from Moxfield, ManaBox, Archidekt or Helvault, or paste a public Deckbox link, which adds a Refresh button so you never have to ask for an export again. Re-uploading under the same name replaces that person's collection.",
+    body: "Everyone's cards live here. Add a collection opens the form: upload a CSV export from Moxfield, ManaBox, Archidekt or Helvault, or paste a public Deckbox link, which adds a Refresh button so you never have to ask for an export again. A downloaded export can also be dragged straight onto this panel — if it is named after someone already here, it fills their name in for you. Re-uploading under the same name replaces that person's collection.",
   },
   {
     target: "update-collection",

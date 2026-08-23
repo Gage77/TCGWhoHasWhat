@@ -9,12 +9,88 @@ import { money } from "@/lib/format";
 
 interface Props {
   ownerId: string;
+  /**
+   * Adds one card to the chosen want list, or null when there is nobody to
+   * add it for — nobody has said who they are, or this is their own
+   * collection.
+   */
+  onWant: ((card: BrowseCard) => Promise<string>) | null;
+  /**
+   * Lowercased names already on the list being added to. Offering to add a
+   * card somebody has already asked for is a way of not telling them they
+   * asked for it.
+   */
+  wanted: Set<string>;
   /** The first page, rendered on the server so there is no loading flash. */
   page: BrowsePage;
   /** The query and sort that produced it, for asking for the next page. */
   query: string;
   sort: string;
   view: "grid" | "list";
+}
+
+/**
+ * The one-card "want" control.
+ *
+ * Reports into itself rather than into a banner at the top: on a wall of sixty
+ * cards, a message somewhere else about a card you just tapped is a message
+ * about no card in particular.
+ */
+function WantButton({
+  card,
+  onWant,
+  alreadyWanted,
+  compact,
+}: {
+  card: BrowseCard;
+  onWant: (card: BrowseCard) => Promise<string>;
+  alreadyWanted: boolean;
+  compact?: boolean;
+}) {
+  const [own, setOwn] = useState<"idle" | "saving" | "done" | "failed">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  // Derived rather than an initial state, so a card that lands on the list by
+  // some other route — the bulk add, another tab — catches up on the next
+  // render instead of staying stuck on an offer to add it.
+  const state = own === "idle" && alreadyWanted ? "done" : own;
+
+  async function add(event: React.MouseEvent) {
+    event.stopPropagation();
+    setOwn("saving");
+    try {
+      setMessage(await onWant(card));
+      setOwn("done");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not save that.");
+      setOwn("failed");
+    }
+  }
+
+  const label =
+    state === "saving" ? "Saving…" : state === "done" ? "✓ Wanted" : state === "failed" ? "Failed" : "+ Want";
+
+  return (
+    <button
+      type="button"
+      onClick={add}
+      disabled={state === "saving" || state === "done"}
+      title={
+        message ?? (state === "done" ? `${card.name} is on your want list` : `Add ${card.name} to your want list`)
+      }
+      className={`shrink-0 rounded-full border px-2 py-1 text-xs font-medium transition ${
+        compact ? "" : "px-2.5"
+      } ${
+        state === "done"
+          ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
+          : state === "failed"
+            ? "border-red-300 text-red-600 dark:border-red-900 dark:text-red-400"
+            : "border-zinc-300 text-zinc-600 hover:border-emerald-500 hover:text-emerald-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
 
 const PAGE_SIZE = 60;
@@ -56,7 +132,15 @@ function CardImage({ card, className }: { card: BrowseCard; className?: string }
   );
 }
 
-function GridTile({ card }: { card: BrowseCard }) {
+function GridTile({
+  card,
+  onWant,
+  wanted,
+}: {
+  card: BrowseCard;
+  onWant: Props["onWant"];
+  wanted: Set<string>;
+}) {
   return (
     <li>
       {/*
@@ -71,7 +155,7 @@ function GridTile({ card }: { card: BrowseCard }) {
       <p className="mt-1.5 truncate text-xs font-medium" title={card.name}>
         {card.name}
       </p>
-      <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
         <span>{copyLine(card)}</span>
         {card.price !== null && (
           <span className="font-medium text-emerald-600 dark:text-emerald-400">
@@ -83,12 +167,28 @@ function GridTile({ card }: { card: BrowseCard }) {
             {FINISH_BADGE[card.finish]}
           </span>
         )}
-      </p>
+        {onWant && (
+          <WantButton
+            card={card}
+            onWant={onWant}
+            alreadyWanted={wanted.has(card.name.toLowerCase())}
+            compact
+          />
+        )}
+      </div>
     </li>
   );
 }
 
-function ListRow({ card }: { card: BrowseCard }) {
+function ListRow({
+  card,
+  onWant,
+  wanted,
+}: {
+  card: BrowseCard;
+  onWant: Props["onWant"];
+  wanted: Set<string>;
+}) {
   return (
     <li className="flex items-center gap-3 border-t border-zinc-200 px-3 py-2 first:border-t-0 dark:border-zinc-800">
       <span className="w-10 shrink-0">
@@ -124,6 +224,14 @@ function ListRow({ card }: { card: BrowseCard }) {
           </span>
         )}
       </span>
+
+      {onWant && (
+        <WantButton
+          card={card}
+          onWant={onWant}
+          alreadyWanted={wanted.has(card.name.toLowerCase())}
+        />
+      )}
     </li>
   );
 }
@@ -137,7 +245,7 @@ function ListRow({ card }: { card: BrowseCard }) {
  * changing a filter re-renders rather than fetches — and why this component is
  * keyed on the filter, so the pile of appended pages goes with it.
  */
-export function CardResults({ ownerId, page, query, sort, view }: Props) {
+export function CardResults({ ownerId, onWant, wanted, page, query, sort, view }: Props) {
   const [extra, setExtra] = useState<BrowseCard[]>([]);
   const [hasMore, setHasMore] = useState(page.hasMore);
   const [loading, setLoading] = useState(false);
@@ -186,13 +294,13 @@ export function CardResults({ ownerId, page, query, sort, view }: Props) {
       {view === "grid" ? (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
           {cards.map((card) => (
-            <GridTile key={card.id} card={card} />
+            <GridTile key={card.id} card={card} onWant={onWant} wanted={wanted} />
           ))}
         </ul>
       ) : (
         <ul className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           {cards.map((card) => (
-            <ListRow key={card.id} card={card} />
+            <ListRow key={card.id} card={card} onWant={onWant} wanted={wanted} />
           ))}
         </ul>
       )}

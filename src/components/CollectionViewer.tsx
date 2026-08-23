@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { CardResults } from "@/components/CardResults";
-import type { BrowsePage, CollectionFacets } from "@/lib/browse";
+import { NoIdentityNote, WantTargetBar, useWantTarget } from "@/components/WantTarget";
+import type { BrowseCard, BrowsePage, CollectionFacets } from "@/lib/browse";
 import { SORTS } from "@/lib/cardQuerySql";
 import type { Owner } from "@/lib/db";
 import { freshnessOf, money, relativeDate } from "@/lib/format";
+import { useIdentity } from "@/lib/identity";
+import { cardToWant } from "@/lib/wantDrafts";
 import {
   activeFilterCount,
   fullQuery,
@@ -19,6 +22,8 @@ import {
 
 interface Props {
   owner: Owner;
+  /** Everyone in the group, so the remembered identity can be checked. */
+  owners: Owner[];
   page: BrowsePage;
   facets: CollectionFacets;
   /** What the parser made of the query, in words worth showing. */
@@ -149,6 +154,7 @@ function Range({
  */
 export function CollectionViewer({
   owner,
+  owners,
   page,
   facets,
   warnings,
@@ -160,6 +166,8 @@ export function CollectionViewer({
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [meId] = useIdentity(owners);
+  const [wantStatus, setWantStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   // The query box is typed into, so it is held locally and pushed on a pause.
   const [draft, setDraft] = useState(text);
@@ -214,6 +222,37 @@ export function CollectionViewer({
   const active = activeFilterCount(controls);
   const query = fullQuery(text, controls);
   const stale = freshnessOf(owner.updatedAt) !== "fresh";
+
+  // Wants belong to the person browsing, not to whoever owns the cards — which
+  // is also why there is nothing to do here when they are the same person.
+  const browsingOwn = meId === owner.id;
+  const canWant = Boolean(meId) && !browsingOwn;
+  const wants = useWantTarget(canWant ? meId : "", owner.id, query);
+
+  async function addFiltered() {
+    setWantStatus(null);
+    try {
+      setWantStatus({ kind: "ok", text: await wants.addFiltered() });
+      // The trades tab reads want counts off the server render.
+      startTransition(() => router.refresh());
+    } catch (error) {
+      setWantStatus({
+        kind: "error",
+        text: error instanceof Error ? error.message : "Could not add those cards.",
+      });
+    }
+  }
+
+  const onWant = canWant
+    ? async (card: BrowseCard) => wants.addCard(cardToWant(card))
+    : null;
+
+  // What is already on the list being added to, so cards can say so.
+  const wantedNames = new Set(
+    (wants.lists?.find((list) => list.id === wants.target)?.cards ?? []).map((card) =>
+      card.name.toLowerCase(),
+    ),
+  );
 
   const filters = (
     <div className="space-y-5">
@@ -432,6 +471,18 @@ export function CollectionViewer({
               </p>
             </div>
 
+            {canWant ? (
+              <WantTargetBar
+                state={wants}
+                matching={page.total}
+                filtered={active > 0 || text.trim() !== ""}
+                status={wantStatus}
+                onAddFiltered={addFiltered}
+              />
+            ) : (
+              <NoIdentityNote browsingOwn={browsingOwn} />
+            )}
+
             {warnings.map((warning) => (
               <p
                 key={warning}
@@ -449,6 +500,8 @@ export function CollectionViewer({
           <CardResults
             key={`${query}|${sort}`}
             ownerId={owner.id}
+            onWant={onWant}
+            wanted={wantedNames}
             page={page}
             query={query}
             sort={sort}

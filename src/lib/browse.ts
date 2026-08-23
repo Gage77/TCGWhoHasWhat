@@ -62,7 +62,14 @@ export interface BrowsePage {
 }
 
 const DEFAULT_LIMIT = 60;
-const MAX_LIMIT = 200;
+/**
+ * A ceiling on what one query can return, so a hand-edited `limit=999999`
+ * cannot ask for somebody's whole collection in one go. Set above the bulk
+ * want-list cap on purpose: that path legitimately reads more rows than a page
+ * shows, and clamping it here would quietly truncate the add and make the
+ * count of what it left out wrong.
+ */
+const MAX_LIMIT = 400;
 
 const COLUMNS = `
   c.id, c.name, c.set_code, c.collector_number, c.quantity, c.tradelist_quantity,

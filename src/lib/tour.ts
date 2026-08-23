@@ -54,6 +54,13 @@ export const TOUR_STEPS: TourStep[] = [
     body: "A collection is only as good as its last export, and a stale one quietly turns into bad trade advice. Update sets the form up to replace that person's collection — and tells you where their tracker keeps its export button. Anything older than a couple of weeks gets flagged here, on trade offers, and above search results.",
   },
   {
+    target: "browse-collection",
+    tab: "search",
+    skipIfMissing: true,
+    title: "Look through what someone has",
+    body: "Browse opens a collection on its own page — every card as art or as a list, filtered by colour, type, mana value, rarity, set or price, and sorted by what it is worth. The search box there also takes Scryfall syntax, so c:u t:instant mv<=3 does what you would expect. The filter lives in the address bar, which means a filtered collection is a link you can send someone.",
+  },
+  {
     target: "identity",
     title: "Tell it who you are",
     body: "Both halves of the app need to know whose side you're on: the search tab to subtract cards you already own, the trades tab to know what you'd be giving up. Set it once — it's remembered in this browser.",

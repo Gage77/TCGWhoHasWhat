@@ -7,7 +7,13 @@ import { findCards, type CollectionHit } from "./db";
 import { deckNeed } from "./deckNeed";
 import { nameKeys, primaryKey } from "./normalize";
 import { parseWantList } from "./parseList";
-import { identifierKey, priceForFinish, resolveCards, type CardIdentifier } from "./scryfall";
+import {
+  identifierFor,
+  identifierKey,
+  priceForFinish,
+  resolveCards,
+  type CardIdentifier,
+} from "./scryfall";
 
 export interface CopyMatch {
   setCode: string | null;
@@ -102,11 +108,7 @@ export interface SearchOptions {
 
 /** Build the best identifier available for a collection row. */
 function identifierForHit(hit: CollectionHit): CardIdentifier {
-  if (hit.scryfallId) return { kind: "id", id: hit.scryfallId };
-  if (hit.setCode && hit.collectorNumber) {
-    return { kind: "printing", setCode: hit.setCode, collectorNumber: hit.collectorNumber };
-  }
-  return { kind: "name", name: hit.name };
+  return identifierFor(hit);
 }
 
 export async function runSearch(

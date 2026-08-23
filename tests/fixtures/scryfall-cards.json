@@ -1,0 +1,385 @@
+[
+  {
+    "id": "d2705b43-a94a-44c0-8740-82e0b296820c",
+    "name": "Abhorrent Oculus",
+    "set": "dsk",
+    "set_name": "Duskmourn: House of Horror",
+    "collector_number": "42",
+    "released_at": "2024-09-27",
+    "rarity": "mythic",
+    "cmc": 3.0,
+    "colors": [
+      "U"
+    ],
+    "color_identity": [
+      "U"
+    ],
+    "type_line": "Creature — Eye",
+    "oracle_text": "As an additional cost to cast this spell, exile six cards from your graveyard.\nFlying\nAt the beginning of each opponent's upkeep, manifest dread. (Look at the top two cards of your library. Put one onto the battlefield face down as a 2/2 creature and the other into your graveyard. Turn it face up any time for its mana cost if it's a creature card.)",
+    "mana_cost": "{2}{U}",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying",
+      "Manifest",
+      "Manifest dread"
+    ],
+    "legalities": {
+      "standard": "legal",
+      "future": "legal",
+      "historic": "legal",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "not_legal",
+      "vintage": "legal",
+      "penny": "not_legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "legal",
+      "paupercommander": "not_legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "not_legal",
+      "tlr": "legal"
+    },
+    "layout": "normal",
+    "artist": "Bryan Sola",
+    "edhrec_rank": 5484,
+    "reserved": false,
+    "promo": false,
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/d/2/d2705b43-a94a-44c0-8740-82e0b296820c.jpg?1783909500",
+      "normal": "https://cards.scryfall.io/normal/front/d/2/d2705b43-a94a-44c0-8740-82e0b296820c.jpg?1783909500"
+    },
+    "scryfall_uri": "https://scryfall.com/card/dsk/42/abhorrent-oculus?utm_source=api"
+  },
+  {
+    "id": "91fdb56b-54d5-4272-8319-505ff987fe9b",
+    "name": "Sol Ring",
+    "set": "msc",
+    "set_name": "Marvel Super Heroes Commander",
+    "collector_number": "211",
+    "released_at": "2026-06-26",
+    "rarity": "uncommon",
+    "cmc": 1.0,
+    "colors": [],
+    "color_identity": [],
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {C}{C}.",
+    "mana_cost": "{1}",
+    "keywords": [],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "not_legal",
+      "timeless": "not_legal",
+      "gladiator": "not_legal",
+      "pioneer": "not_legal",
+      "modern": "not_legal",
+      "legacy": "banned",
+      "pauper": "not_legal",
+      "vintage": "restricted",
+      "penny": "not_legal",
+      "commander": "legal",
+      "oathbreaker": "banned",
+      "standardbrawl": "not_legal",
+      "brawl": "not_legal",
+      "competitivebrawl": "not_legal",
+      "alchemy": "not_legal",
+      "paupercommander": "not_legal",
+      "duel": "banned",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "legal",
+      "tlr": "banned"
+    },
+    "layout": "normal",
+    "artist": "Myles Wohl",
+    "edhrec_rank": 1,
+    "reserved": false,
+    "promo": false,
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/9/1/91fdb56b-54d5-4272-8319-505ff987fe9b.jpg?1783903215",
+      "normal": "https://cards.scryfall.io/normal/front/9/1/91fdb56b-54d5-4272-8319-505ff987fe9b.jpg?1783903215"
+    },
+    "scryfall_uri": "https://scryfall.com/card/msc/211/sol-ring?utm_source=api"
+  },
+  {
+    "id": "63e4dc07-c742-41bd-8301-861637908fd1",
+    "name": "Breeding Pool",
+    "set": "trk",
+    "set_name": "Star Trek",
+    "collector_number": "279",
+    "released_at": "2026-11-13",
+    "rarity": "rare",
+    "cmc": 0.0,
+    "colors": [],
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "type_line": "Land — Forest Island",
+    "oracle_text": "({T}: Add {G} or {U}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+    "mana_cost": "",
+    "keywords": [],
+    "legalities": {
+      "standard": "legal",
+      "future": "legal",
+      "historic": "legal",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "not_legal",
+      "vintage": "legal",
+      "penny": "legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "legal",
+      "paupercommander": "not_legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "legal",
+      "tlr": "legal"
+    },
+    "layout": "normal",
+    "artist": "Cliff Nielsen",
+    "edhrec_rank": 59,
+    "reserved": false,
+    "promo": false,
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/6/3/63e4dc07-c742-41bd-8301-861637908fd1.jpg?1784036820",
+      "normal": "https://cards.scryfall.io/normal/front/6/3/63e4dc07-c742-41bd-8301-861637908fd1.jpg?1784036820"
+    },
+    "scryfall_uri": "https://scryfall.com/card/trk/279/breeding-pool?utm_source=api"
+  },
+  {
+    "id": "18303862-4726-4136-814f-157aa7006579",
+    "name": "Fire // Ice",
+    "set": "dmr",
+    "set_name": "Dominaria Remastered",
+    "collector_number": "215",
+    "released_at": "2023-01-13",
+    "rarity": "uncommon",
+    "cmc": 4.0,
+    "colors": [
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "R",
+      "U"
+    ],
+    "type_line": "Instant // Instant",
+    "mana_cost": "{1}{R} // {1}{U}",
+    "keywords": [],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "not_legal",
+      "timeless": "not_legal",
+      "gladiator": "not_legal",
+      "pioneer": "not_legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "legal",
+      "vintage": "legal",
+      "penny": "not_legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "not_legal",
+      "brawl": "not_legal",
+      "competitivebrawl": "not_legal",
+      "alchemy": "not_legal",
+      "paupercommander": "legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "legal",
+      "predh": "legal",
+      "tlr": "legal"
+    },
+    "layout": "split",
+    "artist": "David Martin & Franz Vohwinkel",
+    "edhrec_rank": 12882,
+    "reserved": false,
+    "promo": false,
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/1/8/18303862-4726-4136-814f-157aa7006579.jpg?1783918420",
+      "normal": "https://cards.scryfall.io/normal/front/1/8/18303862-4726-4136-814f-157aa7006579.jpg?1783918420"
+    },
+    "card_faces": [
+      {
+        "mana_cost": "{1}{R}",
+        "type_line": "Instant",
+        "oracle_text": "Fire deals 2 damage divided as you choose among one or two targets."
+      },
+      {
+        "mana_cost": "{1}{U}",
+        "type_line": "Instant",
+        "oracle_text": "Tap target permanent.\nDraw a card."
+      }
+    ],
+    "scryfall_uri": "https://scryfall.com/card/dmr/215/fire-ice?utm_source=api"
+  },
+  {
+    "id": "6904ea20-e504-47da-95a0-08739fdde260",
+    "name": "Delver of Secrets // Insectile Aberration",
+    "set": "inr",
+    "set_name": "Innistrad Remastered",
+    "collector_number": "60",
+    "released_at": "2025-01-24",
+    "rarity": "common",
+    "cmc": 1.0,
+    "color_identity": [
+      "U"
+    ],
+    "type_line": "Creature — Human Wizard // Creature — Human Insect",
+    "keywords": [
+      "Flying",
+      "Transform"
+    ],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "legal",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "legal",
+      "vintage": "legal",
+      "penny": "not_legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "not_legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "not_legal",
+      "paupercommander": "legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "not_legal",
+      "tlr": "legal"
+    },
+    "layout": "transform",
+    "artist": "Nils Hamm",
+    "edhrec_rank": 15984,
+    "reserved": false,
+    "promo": false,
+    "card_faces": [
+      {
+        "mana_cost": "{U}",
+        "type_line": "Creature — Human Wizard",
+        "oracle_text": "At the beginning of your upkeep, look at the top card of your library. You may reveal that card. If an instant or sorcery card is revealed this way, transform this creature.",
+        "power": "1",
+        "toughness": "1",
+        "colors": [
+          "U"
+        ],
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "normal": "https://cards.scryfall.io/normal/front/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173"
+        }
+      },
+      {
+        "mana_cost": "",
+        "type_line": "Creature — Human Insect",
+        "oracle_text": "Flying",
+        "power": "3",
+        "toughness": "2",
+        "colors": [
+          "U"
+        ],
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173",
+          "normal": "https://cards.scryfall.io/normal/back/6/9/6904ea20-e504-47da-95a0-08739fdde260.jpg?1783908173"
+        }
+      }
+    ],
+    "scryfall_uri": "https://scryfall.com/card/inr/60/delver-of-secrets-insectile-aberration?utm_source=api"
+  },
+  {
+    "id": "67f4c93b-080c-4196-b095-6a120a221988",
+    "name": "Agadeem's Awakening // Agadeem, the Undercrypt",
+    "set": "znr",
+    "set_name": "Zendikar Rising",
+    "collector_number": "90",
+    "released_at": "2020-09-25",
+    "rarity": "mythic",
+    "cmc": 3.0,
+    "color_identity": [
+      "B"
+    ],
+    "type_line": "Sorcery // Land",
+    "keywords": [],
+    "legalities": {
+      "standard": "not_legal",
+      "future": "not_legal",
+      "historic": "legal",
+      "timeless": "legal",
+      "gladiator": "legal",
+      "pioneer": "legal",
+      "modern": "legal",
+      "legacy": "legal",
+      "pauper": "not_legal",
+      "vintage": "legal",
+      "penny": "not_legal",
+      "commander": "legal",
+      "oathbreaker": "legal",
+      "standardbrawl": "not_legal",
+      "brawl": "legal",
+      "competitivebrawl": "legal",
+      "alchemy": "not_legal",
+      "paupercommander": "not_legal",
+      "duel": "legal",
+      "oldschool": "not_legal",
+      "premodern": "not_legal",
+      "predh": "not_legal",
+      "tlr": "legal"
+    },
+    "layout": "modal_dfc",
+    "artist": "Dmitry Burmak",
+    "edhrec_rank": 960,
+    "reserved": false,
+    "promo": false,
+    "card_faces": [
+      {
+        "mana_cost": "{X}{B}{B}{B}",
+        "type_line": "Sorcery",
+        "oracle_text": "Return from your graveyard to the battlefield any number of target creature cards that each have a different mana value X or less.",
+        "colors": [
+          "B"
+        ],
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/front/6/7/67f4c93b-080c-4196-b095-6a120a221988.jpg?1783929388",
+          "normal": "https://cards.scryfall.io/normal/front/6/7/67f4c93b-080c-4196-b095-6a120a221988.jpg?1783929388"
+        }
+      },
+      {
+        "mana_cost": "",
+        "type_line": "Land",
+        "oracle_text": "As this land enters, you may pay 3 life. If you don't, it enters tapped.\n{T}: Add {B}.",
+        "colors": [],
+        "image_uris": {
+          "small": "https://cards.scryfall.io/small/back/6/7/67f4c93b-080c-4196-b095-6a120a221988.jpg?1783929388",
+          "normal": "https://cards.scryfall.io/normal/back/6/7/67f4c93b-080c-4196-b095-6a120a221988.jpg?1783929388"
+        }
+      }
+    ],
+    "scryfall_uri": "https://scryfall.com/card/znr/90/agadeems-awakening-agadeem-the-undercrypt?utm_source=api"
+  }
+]

@@ -11,6 +11,7 @@ import { createClient, type Client, type Transaction } from "@libsql/client";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
+import type { CardFacts } from "./cardFacts";
 import { diffCollections, type CollectionDiff, type CountedCard } from "./collectionDiff";
 import { NO_DATABASE_MESSAGE, isProduction, persistentStorageConfigured } from "./config";
 import type { CollectionCard } from "./csv";
@@ -35,7 +36,8 @@ const TABLES = [
     finish             TEXT NOT NULL,
     condition          TEXT,
     language           TEXT,
-    scryfall_id        TEXT
+    scryfall_id        TEXT,
+    facts_id           TEXT
   )`,
   // One row per searchable name key, so split/DFC faces are all findable.
   `CREATE TABLE IF NOT EXISTS card_keys (
@@ -46,6 +48,40 @@ const TABLES = [
     lookup_key TEXT PRIMARY KEY,
     card_json  TEXT,
     fetched_at INTEGER NOT NULL
+  )`,
+  // What a card *is*, as opposed to what it currently costs. Keyed by
+  // printing and shared across owners, because three people owning Sol Ring
+  // is three collection rows and one card. Nothing here expires on a timer:
+  // a type line does not change, and a reprint is a new printing with its own
+  // id rather than an edit to this one.
+  `CREATE TABLE IF NOT EXISTS card_facts (
+    scryfall_id      TEXT PRIMARY KEY,
+    name             TEXT NOT NULL,
+    name_key         TEXT NOT NULL,
+    set_code         TEXT NOT NULL,
+    set_name         TEXT NOT NULL,
+    collector_number TEXT NOT NULL,
+    released_at      TEXT,
+    rarity           TEXT NOT NULL,
+    mana_cost        TEXT,
+    cmc              REAL NOT NULL DEFAULT 0,
+    colors           TEXT NOT NULL DEFAULT '',
+    color_identity   TEXT NOT NULL DEFAULT '',
+    type_line        TEXT NOT NULL DEFAULT '',
+    oracle_text      TEXT,
+    power            TEXT,
+    toughness        TEXT,
+    loyalty          TEXT,
+    keywords         TEXT NOT NULL DEFAULT '[]',
+    legalities       TEXT NOT NULL DEFAULT '{}',
+    layout           TEXT NOT NULL DEFAULT 'normal',
+    artist           TEXT,
+    image_small      TEXT,
+    image_normal     TEXT,
+    edhrec_rank      INTEGER,
+    reserved         INTEGER NOT NULL DEFAULT 0,
+    promo            INTEGER NOT NULL DEFAULT 0,
+    fetched_at       INTEGER NOT NULL
   )`,
   // Want lists are named and there can be several per person, because a want
   // is really "for my Atraxa deck" rather than an undifferentiated pile.
@@ -86,11 +122,16 @@ const INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_want_lists_owner ON want_lists(owner_id)`,
   `CREATE INDEX IF NOT EXISTS idx_card_keys_card ON card_keys(card_id)`,
   `CREATE INDEX IF NOT EXISTS idx_cards_owner ON collection_cards(owner_id)`,
+  // The join every filtered query makes: a collection row to what it is.
+  `CREATE INDEX IF NOT EXISTS idx_cards_scryfall ON collection_cards(scryfall_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_cards_facts ON collection_cards(facts_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_facts_name_key ON card_facts(name_key)`,
 ];
 
 // Columns added after the initial release; databases created before them need
 // them back-filled. SQLite has no "ADD COLUMN IF NOT EXISTS".
 const ADDED_COLUMNS: Array<[string, string]> = [
+  ["collection_cards", "facts_id TEXT"],
   ["owners", "source_url TEXT"],
   ["owners", "source_tracker TEXT"],
   ["want_cards", "list_id TEXT"],
@@ -893,4 +934,260 @@ export async function writeCache(entries: Array<[string, string | null]>): Promi
       args: chunk.flatMap(([key, json]) => [key, json, now]),
     });
   }
+}
+
+/**
+ * One printing in someone's collection, as the rows describe it.
+ *
+ * A collection row knows a name and usually a set and collector number; only
+ * a Moxfield export or a previous enrichment knows the Scryfall id.
+ */
+export interface CollectionPrinting {
+  name: string;
+  setCode: string | null;
+  collectorNumber: string | null;
+  scryfallId: string | null;
+}
+
+/**
+ * Point rows at facts already on hand, without asking Scryfall anything.
+ *
+ * Replacing a collection throws away every row, so a Deckbox refresh arrives
+ * with several thousand printings needing facts — nearly all of which are the
+ * same printings that were there an hour ago and are still sitting in
+ * `card_facts`. Matching those locally first turns the common refresh from
+ * hundreds of requests into none.
+ *
+ * Only the two exact cases: a row that names its Scryfall id, and one that
+ * names a set and a collector number. A row carrying just a name could match
+ * several printings, and picking between them is a judgement the network path
+ * makes consistently and this one would not.
+ *
+ * @returns how many rows were linked.
+ */
+export async function linkKnownFacts(ownerId: string): Promise<number> {
+  const db = await getDb();
+
+  const [byId, byPrinting] = await db.batch(
+    [
+      {
+        sql: `UPDATE collection_cards AS c
+              SET facts_id = c.scryfall_id
+              WHERE c.owner_id = ? AND c.facts_id IS NULL AND c.scryfall_id IS NOT NULL
+                AND EXISTS (SELECT 1 FROM card_facts f WHERE f.scryfall_id = c.scryfall_id)`,
+        args: [ownerId],
+      },
+      {
+        // Fills in the printing id as well, for the same reason `linkFacts`
+        // does: a row identified this precisely can be priced precisely.
+        sql: `UPDATE collection_cards AS c
+              SET facts_id = (
+                    SELECT f.scryfall_id FROM card_facts f
+                    WHERE f.set_code = c.set_code COLLATE NOCASE
+                      AND f.collector_number = c.collector_number COLLATE NOCASE
+                  ),
+                  scryfall_id = COALESCE(c.scryfall_id, (
+                    SELECT f.scryfall_id FROM card_facts f
+                    WHERE f.set_code = c.set_code COLLATE NOCASE
+                      AND f.collector_number = c.collector_number COLLATE NOCASE
+                  ))
+              WHERE c.owner_id = ? AND c.facts_id IS NULL
+                AND c.set_code IS NOT NULL AND c.collector_number IS NOT NULL
+                AND EXISTS (
+                  SELECT 1 FROM card_facts f
+                  WHERE f.set_code = c.set_code COLLATE NOCASE
+                    AND f.collector_number = c.collector_number COLLATE NOCASE
+                )`,
+        args: [ownerId],
+      },
+    ],
+    "write",
+  );
+
+  return Number(byId.rowsAffected ?? 0) + Number(byPrinting.rowsAffected ?? 0);
+}
+
+/**
+ * The distinct printings in a collection that nothing yet knows the facts of.
+ *
+ * Distinct because a person holding four copies in three conditions is four
+ * rows and one card to look up, and the difference between those two numbers
+ * is the difference between one Scryfall request and twenty.
+ */
+export async function listPrintingsNeedingFacts(ownerId: string): Promise<CollectionPrinting[]> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT DISTINCT name, set_code, collector_number, scryfall_id
+          FROM collection_cards
+          WHERE owner_id = ? AND facts_id IS NULL`,
+    args: [ownerId],
+  });
+
+  return result.rows.map((row) => ({
+    name: String(row.name),
+    setCode: row.set_code ? String(row.set_code) : null,
+    collectorNumber: row.collector_number ? String(row.collector_number) : null,
+    scryfallId: row.scryfall_id ? String(row.scryfall_id) : null,
+  }));
+}
+
+/** Store what a set of printings are. Existing rows are refreshed in place. */
+export async function writeCardFacts(facts: CardFacts[]): Promise<void> {
+  if (facts.length === 0) return;
+  const db = await getDb();
+  const now = Date.now();
+
+  // 27 columns a row, so the chunk is smaller than elsewhere to stay well
+  // inside SQLite's cap on variables per statement.
+  const CHUNK = 60;
+  for (let i = 0; i < facts.length; i += CHUNK) {
+    const chunk = facts.slice(i, i + CHUNK);
+    await db.execute({
+      sql: `INSERT INTO card_facts
+              (scryfall_id, name, name_key, set_code, set_name, collector_number,
+               released_at, rarity, mana_cost, cmc, colors, color_identity, type_line,
+               oracle_text, power, toughness, loyalty, keywords, legalities, layout,
+               artist, image_small, image_normal, edhrec_rank, reserved, promo, fetched_at)
+            VALUES ${chunk
+              .map(() => `(${new Array(27).fill("?").join(", ")})`)
+              .join(", ")}
+            ON CONFLICT(scryfall_id) DO UPDATE SET
+              name = excluded.name,
+              name_key = excluded.name_key,
+              set_name = excluded.set_name,
+              released_at = excluded.released_at,
+              rarity = excluded.rarity,
+              mana_cost = excluded.mana_cost,
+              cmc = excluded.cmc,
+              colors = excluded.colors,
+              color_identity = excluded.color_identity,
+              type_line = excluded.type_line,
+              oracle_text = excluded.oracle_text,
+              power = excluded.power,
+              toughness = excluded.toughness,
+              loyalty = excluded.loyalty,
+              keywords = excluded.keywords,
+              legalities = excluded.legalities,
+              layout = excluded.layout,
+              artist = excluded.artist,
+              image_small = excluded.image_small,
+              image_normal = excluded.image_normal,
+              edhrec_rank = excluded.edhrec_rank,
+              reserved = excluded.reserved,
+              promo = excluded.promo,
+              fetched_at = excluded.fetched_at`,
+      args: chunk.flatMap((card) => [
+        card.scryfallId,
+        card.name,
+        // Derived here rather than in the projection: `primaryKey` is a
+        // runtime import, and the projection stays free of those so the tests
+        // can load it without a bundler to resolve them.
+        primaryKey(card.name),
+        card.setCode,
+        card.setName,
+        card.collectorNumber,
+        card.releasedAt,
+        card.rarity,
+        card.manaCost,
+        card.cmc,
+        card.colors,
+        card.colorIdentity,
+        card.typeLine,
+        card.oracleText,
+        card.power,
+        card.toughness,
+        card.loyalty,
+        JSON.stringify(card.keywords),
+        JSON.stringify(card.legalities),
+        card.layout,
+        card.artist,
+        card.imageSmall,
+        card.imageNormal,
+        card.edhrecRank,
+        card.reserved ? 1 : 0,
+        card.promo ? 1 : 0,
+        now,
+      ]),
+    });
+  }
+}
+
+/**
+ * Point collection rows at the facts that describe them.
+ *
+ * `facts_id` is deliberately not `scryfall_id`. A row that names a set and a
+ * collector number identifies its printing exactly, and both columns are
+ * filled — which also means every later price lookup for it becomes an exact
+ * id hit rather than a name guess. A row that only carries a name does not:
+ * Scryfall answers with *a* printing, whose colours and type line are right
+ * but whose price and art may belong to a version this person does not own.
+ * Those rows get facts to filter on and keep an empty `scryfall_id`, so
+ * pricing goes on being honest about not knowing which printing it is.
+ */
+export async function linkFacts(
+  ownerId: string,
+  links: Array<{ printing: CollectionPrinting; factsId: string }>,
+): Promise<void> {
+  if (links.length === 0) return;
+  const db = await getDb();
+
+  const statements = links.map(({ printing, factsId }) => {
+    if (printing.scryfallId) {
+      return {
+        sql: `UPDATE collection_cards SET facts_id = ?
+              WHERE owner_id = ? AND scryfall_id = ?`,
+        args: [factsId, ownerId, printing.scryfallId],
+      };
+    }
+
+    if (printing.setCode && printing.collectorNumber) {
+      return {
+        sql: `UPDATE collection_cards SET facts_id = ?, scryfall_id = ?
+              WHERE owner_id = ? AND facts_id IS NULL
+                AND set_code = ? COLLATE NOCASE
+                AND collector_number = ? COLLATE NOCASE`,
+        args: [factsId, factsId, ownerId, printing.setCode, printing.collectorNumber],
+      };
+    }
+
+    return {
+      sql: `UPDATE collection_cards SET facts_id = ?
+            WHERE owner_id = ? AND facts_id IS NULL AND scryfall_id IS NULL
+              AND name = ? COLLATE NOCASE
+              AND (set_code IS NULL OR collector_number IS NULL)`,
+      args: [factsId, ownerId, printing.name],
+    };
+  });
+
+  // Batched: a 20,000-card collection is a few thousand printings, and one
+  // round trip each to a hosted database would take longer than the fetch did.
+  const CHUNK = 100;
+  for (let i = 0; i < statements.length; i += CHUNK) {
+    await db.batch(statements.slice(i, i + CHUNK), "write");
+  }
+}
+
+/**
+ * How much of a collection can currently be filtered.
+ *
+ * Rows rather than distinct cards: this is what the viewer reports, and what
+ * it is really saying is "this many of the cards below cannot be filtered
+ * yet" — which is a count of rows.
+ */
+export async function factsProgress(
+  ownerId: string,
+): Promise<{ total: number; identified: number }> {
+  const db = await getDb();
+  const result = await db.execute({
+    sql: `SELECT COUNT(*) AS total,
+                 SUM(CASE WHEN facts_id IS NOT NULL THEN 1 ELSE 0 END) AS identified
+          FROM collection_cards WHERE owner_id = ?`,
+    args: [ownerId],
+  });
+
+  const row = result.rows[0];
+  return {
+    total: Number(row?.total ?? 0),
+    identified: Number(row?.identified ?? 0),
+  };
 }

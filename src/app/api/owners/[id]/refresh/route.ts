@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 import { getOwner, replaceCollection } from "@/lib/db";
 import { fetchDeckboxCollection } from "@/lib/deckbox";
+import { enrichOwner } from "@/lib/enrich";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -31,6 +32,15 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
       sourceUrl: owner.sourceUrl,
       tracker: owner.tracker,
     });
+    // A refresh replaces every row, so the new ones need identifying too.
+    after(async () => {
+      try {
+        await enrichOwner(updated.id);
+      } catch {
+        // See the upload route: facts are additive, never load-bearing.
+      }
+    });
+
     return NextResponse.json({ owner: updated, diff, pagesFetched: result.pagesFetched });
   } catch (error) {
     return NextResponse.json(

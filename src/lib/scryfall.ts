@@ -9,6 +9,7 @@
  * at least 100ms apart, and cache aggressively.
  */
 
+import { toCardFacts, type CardFacts } from "./cardFacts";
 import { readCache, writeCache } from "./db";
 import { normalizeName } from "./normalize";
 import { userAgent } from "./userAgent";
@@ -45,6 +46,26 @@ export type CardIdentifier =
   | { kind: "printing"; setCode: string; collectorNumber: string }
   | { kind: "name"; name: string };
 
+/**
+ * The most precise identifier a stored collection row supports.
+ *
+ * Shared, because search and enrichment must agree: they key the same caches
+ * by the result, and a row identified by name in one place and by printing in
+ * the other would look up two different cards.
+ */
+export function identifierFor(row: {
+  scryfallId: string | null;
+  setCode: string | null;
+  collectorNumber: string | null;
+  name: string;
+}): CardIdentifier {
+  if (row.scryfallId) return { kind: "id", id: row.scryfallId };
+  if (row.setCode && row.collectorNumber) {
+    return { kind: "printing", setCode: row.setCode, collectorNumber: row.collectorNumber };
+  }
+  return { kind: "name", name: row.name };
+}
+
 export function identifierKey(identifier: CardIdentifier): string {
   switch (identifier.kind) {
     case "id":
@@ -77,17 +98,44 @@ function toNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-interface ScryfallCard {
+/**
+ * One side of a double-faced or split card.
+ *
+ * Everything here is also a property of an ordinary card, which is what lets
+ * the facts projection read a field off whichever of the two has it.
+ */
+export interface ScryfallFace {
+  mana_cost?: string;
+  type_line?: string;
+  oracle_text?: string;
+  power?: string;
+  toughness?: string;
+  loyalty?: string;
+  colors?: string[];
+  image_uris?: { normal?: string; small?: string };
+}
+
+/** The subset of Scryfall's card object this app reads. */
+export interface ScryfallCard extends ScryfallFace {
   id: string;
   name: string;
   set: string;
   set_name: string;
   collector_number: string;
+  released_at?: string;
   rarity?: string;
+  cmc?: number;
+  color_identity?: string[];
+  keywords?: string[];
+  legalities?: Record<string, string>;
+  layout?: string;
+  artist?: string;
+  edhrec_rank?: number;
+  reserved?: boolean;
+  promo?: boolean;
   prices?: Record<string, string | null>;
   scryfall_uri?: string;
-  image_uris?: { normal?: string; small?: string };
-  card_faces?: Array<{ image_uris?: { normal?: string; small?: string } }>;
+  card_faces?: ScryfallFace[];
   purchase_uris?: { tcgplayer?: string };
 }
 
@@ -217,48 +265,39 @@ async function fuzzyNamed(name: string): Promise<ScryfallCard | null> {
   return (await response.json()) as ScryfallCard;
 }
 
+/** One identifier per key; the same printing is usually wanted several times. */
+function dedupe(identifiers: CardIdentifier[]): Map<string, CardIdentifier> {
+  const byKey = new Map<string, CardIdentifier>();
+  for (const identifier of identifiers) byKey.set(identifierKey(identifier), identifier);
+  return byKey;
+}
+
 /**
- * Resolve identifiers to cards with prices, hitting the cache first and
- * batching whatever is left. Unresolvable identifiers are simply absent from
- * the returned map.
+ * Ask Scryfall for whatever it can resolve, in batches, and match the results
+ * back to the identifiers that asked for them.
+ *
+ * This is deliberately the raw card rather than either projection: prices and
+ * facts come out of the same response, so whichever path runs first can hand
+ * the other one its answer instead of fetching the collection twice.
  */
-export async function resolveCards(
+async function fetchCards(
   identifiers: CardIdentifier[],
   options: { fuzzyFallback?: boolean } = {},
-): Promise<Map<string, ResolvedCard>> {
-  const resolved = new Map<string, ResolvedCard>();
+): Promise<{ cards: Map<string, ScryfallCard>; misses: string[] }> {
+  const cards = new Map<string, ScryfallCard>();
+  const misses: string[] = [];
 
-  // Deduplicate: the same printing is usually wanted by several people.
-  const byKey = new Map<string, CardIdentifier>();
-  for (const identifier of identifiers) {
-    byKey.set(identifierKey(identifier), identifier);
-  }
-
-  const cached = await readCache([...byKey.keys()], CACHE_TTL_MS);
-  const pending: CardIdentifier[] = [];
-
-  for (const [key, identifier] of byKey) {
-    if (cached.has(key)) {
-      const json = cached.get(key);
-      // A cached null records a confirmed miss; do not re-ask Scryfall.
-      if (json) resolved.set(key, JSON.parse(json) as ResolvedCard);
-    } else {
-      pending.push(identifier);
-    }
-  }
-
-  const toCache: Array<[string, string | null]> = [];
-
-  for (let i = 0; i < pending.length; i += BATCH_SIZE) {
-    const batch = pending.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < identifiers.length; i += BATCH_SIZE) {
+    const batch = identifiers.slice(i, i + BATCH_SIZE);
     let found: ScryfallCard[] = [];
     let notFound: CardIdentifier[] = [];
 
     try {
       ({ found, notFound } = await postCollection(batch));
     } catch {
-      // A failed batch should not sink the whole search; those cards just
-      // come back without pricing.
+      // A failed batch should not sink the whole request; those cards just
+      // come back unresolved. Not recorded as misses either — a network blip
+      // is not Scryfall saying the card does not exist.
       continue;
     }
 
@@ -267,7 +306,6 @@ export async function resolveCards(
     // normalized differently, so match on the card's own fields where we can.
     const unmatched = [...found];
     for (const identifier of batch) {
-      const key = identifierKey(identifier);
       let index = -1;
 
       if (identifier.kind === "id") {
@@ -287,10 +325,8 @@ export async function resolveCards(
       }
 
       if (index >= 0) {
-        const card = toResolvedCard(unmatched[index]);
+        cards.set(identifierKey(identifier), unmatched[index]);
         unmatched.splice(index, 1);
-        resolved.set(key, card);
-        toCache.push([key, JSON.stringify(card)]);
       }
     }
 
@@ -299,21 +335,87 @@ export async function resolveCards(
         try {
           const card = await fuzzyNamed(identifier.name);
           if (card) {
-            const resolvedCard = toResolvedCard(card);
-            resolved.set(identifierKey(identifier), resolvedCard);
-            toCache.push([identifierKey(identifier), JSON.stringify(resolvedCard)]);
+            cards.set(identifierKey(identifier), card);
             continue;
           }
         } catch {
           // fall through to recording a miss
         }
       }
-      toCache.push([identifierKey(identifier), null]);
+      misses.push(identifierKey(identifier));
     }
+  }
+
+  return { cards, misses };
+}
+
+/**
+ * Resolve identifiers to cards with prices, hitting the cache first and
+ * batching whatever is left. Unresolvable identifiers are simply absent from
+ * the returned map.
+ */
+export async function resolveCards(
+  identifiers: CardIdentifier[],
+  options: { fuzzyFallback?: boolean } = {},
+): Promise<Map<string, ResolvedCard>> {
+  const resolved = new Map<string, ResolvedCard>();
+  const byKey = dedupe(identifiers);
+
+  const cached = await readCache([...byKey.keys()], CACHE_TTL_MS);
+  const pending: CardIdentifier[] = [];
+
+  for (const [key, identifier] of byKey) {
+    if (cached.has(key)) {
+      const json = cached.get(key);
+      // A cached null records a confirmed miss; do not re-ask Scryfall.
+      if (json) resolved.set(key, JSON.parse(json) as ResolvedCard);
+    } else {
+      pending.push(identifier);
+    }
+  }
+
+  const { cards, misses } = await fetchCards(pending, options);
+  const toCache: Array<[string, string | null]> = [];
+
+  for (const [key, card] of cards) {
+    const resolvedCard = toResolvedCard(card);
+    resolved.set(key, resolvedCard);
+    toCache.push([key, JSON.stringify(resolvedCard)]);
+  }
+  for (const key of misses) {
+    toCache.push([key, null]);
   }
 
   await writeCache(toCache);
   return resolved;
+}
+
+/**
+ * Fetch the filterable half of a card — colours, types, mana value, text.
+ *
+ * Always goes to Scryfall: unlike prices there is no short-lived cache to
+ * check, because the caller (`enrichOwner`) has already asked the database
+ * which printings it is missing facts for. Prices ride along free, since the
+ * response carries them and the alternative is fetching the same collection
+ * again the first time somebody searches.
+ */
+export async function fetchCardFacts(
+  identifiers: CardIdentifier[],
+  options: { fuzzyFallback?: boolean } = {},
+): Promise<{ facts: Map<string, CardFacts>; misses: string[] }> {
+  const byKey = dedupe(identifiers);
+  const { cards, misses } = await fetchCards([...byKey.values()], options);
+
+  const facts = new Map<string, CardFacts>();
+  const prices: Array<[string, string | null]> = [];
+
+  for (const [key, card] of cards) {
+    facts.set(key, toCardFacts(card));
+    prices.push([key, JSON.stringify(toResolvedCard(card))]);
+  }
+
+  await writeCache(prices);
+  return { facts, misses };
 }
 
 /**

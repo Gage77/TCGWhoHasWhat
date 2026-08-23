@@ -284,6 +284,57 @@ in beside a truncated name.
 Prices come from [Scryfall](https://scryfall.com), which aggregates TCGplayer (USD) and
 Cardmarket (EUR) and refreshes daily. Results are cached locally for 12 hours.
 
+## What a card *is*, as opposed to what it costs
+
+Prices only ever needed a card's identity, so that is all the price cache keeps. Filtering
+a collection needs the other half — colour, mana value, type line, oracle text, keywords,
+legalities — and that half behaves completely differently: a type line has never changed
+overnight, while a price is stale by tomorrow.
+
+So they are stored apart. Prices expire after 12 hours in `card_cache`. Facts live in
+`card_facts`, keyed by printing and shared between owners, and do not expire at all — three
+people owning Sol Ring is three collection rows and one card to look up, and a reprint is a
+new printing with its own id rather than an edit to an existing one.
+
+### When it happens
+
+An import stores names and set codes and says what changed, exactly as before. Working out
+what those cards *are* runs afterwards, in `after()`, so nobody watches a progress bar for
+cards they just uploaded. It never has to finish: whatever it misses is picked up the next
+time someone opens the collection, and a collection with no facts yet still searches, prices
+and trades exactly as it always did.
+
+A refresh re-imports mostly the same printings, so the first thing enrichment does is match
+rows against facts already stored — no requests at all for the ones it recognises. Only what
+is left goes to Scryfall, in passes of 750, writing each pass as it lands so a run that runs
+out of time leaves progress behind rather than nothing.
+
+### Two id columns, on purpose
+
+`collection_cards` has both `scryfall_id` and `facts_id`, and the difference is how confident
+we are:
+
+- A row naming a set **and** a collector number identifies its printing exactly. Both columns
+  are filled — and as a side effect every later price lookup for that row becomes an exact id
+  hit instead of a name guess, which makes search and trades more accurate than they were.
+- A row carrying only a name does not. Scryfall answers with *a* printing, whose colours and
+  type line are right but whose price and art may belong to a version this person does not
+  own. Those rows get `facts_id` so they can be filtered, and keep an empty `scryfall_id` so
+  pricing goes on being honest about not knowing.
+
+### Double-faced cards
+
+Scryfall gives a transforming or modal card no top-level colours, mana cost, oracle text or
+power — only faces that have them. Read naively, every flip card in a collection becomes a
+colourless zero-drop with no text to search. The projection in `src/lib/cardFacts.ts` reads
+those off the faces instead, and `tests/cardFacts.test.ts` pins the behaviour against real
+Scryfall responses in `tests/fixtures/scryfall-cards.json` — a transform card, a modal one, a
+split card whose colours come back out of WUBRG order, and a dual land that is two colours
+while being none.
+
+Colours are stored as sorted `WUBRG` letters, so "contains blue" is `LIKE '%U%'` and
+"mono-blue" is `= 'U'`, with no join table and no extra rows per card.
+
 The **Price** column shows the value of the copies your group actually has, as a range
 when they hold different printings. When nobody has a copy it falls back to the default
 printing's price, marked `ref`. A `~` prefix means that exact finish has no listed price

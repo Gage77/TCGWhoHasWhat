@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 import { parseCollectionCsv, type CollectionCard } from "@/lib/csv";
 import { listOwners, replaceCollection } from "@/lib/db";
 import { fetchDeckboxCollection } from "@/lib/deckbox";
+import { enrichOwner } from "@/lib/enrich";
 
 export const dynamic = "force-dynamic";
 // A large Deckbox collection is hundreds of paginated requests.
@@ -70,6 +71,20 @@ export async function POST(request: Request) {
     }
 
     const { owner, diff } = await replaceCollection(ownerName, cards, { sourceUrl, tracker });
+
+    // Work out what these cards are once the upload has been reported. The
+    // person who uploaded wants to know it landed and what changed, not to
+    // watch several thousand printings being looked up — and anything this
+    // does not reach is picked up when someone opens the collection.
+    after(async () => {
+      try {
+        await enrichOwner(owner.id);
+      } catch {
+        // Identification is a convenience: a collection with no facts yet
+        // still searches, prices and trades exactly as it always did.
+      }
+    });
+
     return NextResponse.json({ owner, diff, ...details });
   } catch (error) {
     return NextResponse.json({ error: message(error) }, { status: 400 });

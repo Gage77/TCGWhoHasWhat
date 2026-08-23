@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/*
+ * What `dark:` means here.
+ *
+ * The toggle writes `data-theme` on <html> and that is the first word. The
+ * media query is the second, and applies only while the attribute is absent —
+ * which is to say when the script in <head> never ran, so a browser with
+ * JavaScript off still gets the theme its owner asked the operating system
+ * for, rather than a permanently white page.
+ */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme]), :root:not([data-theme]) *) {
+      @slot;
+    }
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -12,8 +32,14 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* The same two rules as the variant above, for the page's own colours. */
+:root[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --background: #0a0a0a;
     --foreground: #ededed;
   }

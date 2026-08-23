@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { themeBootScript } from "@/lib/themeBoot";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -35,10 +37,22 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
+    // The theme is set on this element before React sees it, which is a
+    // mismatch React would otherwise try to correct.
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        {/*
+          * Runs while the HTML is still being parsed, so the page is already
+          * the right colour when it first paints. An effect, or anything else
+          * that waits for React, is a white flash on every load for anyone in
+          * the dark.
+          */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       {/* `dvh` rather than `%`: mobile browser chrome slides away as you scroll. */}
       <body className="flex min-h-dvh flex-col">{children}</body>
     </html>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { CardResults } from "@/components/CardResults";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { NoIdentityNote, WantTargetBar, useWantTarget } from "@/components/WantTarget";
 import type { BrowseCard, BrowsePage, CollectionFacets } from "@/lib/browse";
 import { SORTS } from "@/lib/cardQuerySql";
@@ -374,12 +375,16 @@ export function CollectionViewer({
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
-      <Link
-        href="/"
-        className="text-sm text-zinc-500 underline-offset-2 hover:text-emerald-600 hover:underline dark:text-zinc-400"
-      >
-        ← All collections
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/"
+          className="text-sm text-zinc-500 underline-offset-2 hover:text-emerald-600 hover:underline dark:text-zinc-400"
+        >
+          ← All collections
+        </Link>
+        {/* Reading through someone's cards is exactly when the lights matter. */}
+        <ThemeToggle />
+      </div>
 
       <header className="mt-3 mb-5">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{owner.name}</h1>

@@ -5,7 +5,7 @@ import { CollectionViewer } from "@/components/CollectionViewer";
 import { browseCollection, collectionFacets } from "@/lib/browse";
 import { parseQuery } from "@/lib/cardQuery";
 import { isSortKey } from "@/lib/cardQuerySql";
-import { factsProgress, getOwner } from "@/lib/db";
+import { factsProgress, getOwner, listOwners } from "@/lib/db";
 import { enrichIfNeeded } from "@/lib/enrich";
 import { fullQuery, readControls } from "@/lib/filterControls";
 
@@ -41,10 +41,13 @@ export default async function CollectionPage(props: PageProps<"/collections/[id]
   // string to parse however the filter was built.
   const { node, warnings } = parseQuery(fullQuery(text, controls));
 
-  const [page, facets, progress] = await Promise.all([
+  const [page, facets, progress, owners] = await Promise.all([
     browseCollection(id, { filter: node, sort }),
     collectionFacets(id),
     factsProgress(id),
+    // For checking the remembered identity, which decides whose want list a
+    // card picked up here would go on.
+    listOwners(),
   ]);
 
   // A collection uploaded before any of this existed has no facts at all.
@@ -61,6 +64,7 @@ export default async function CollectionPage(props: PageProps<"/collections/[id]
   return (
     <CollectionViewer
       owner={owner}
+      owners={owners}
       page={page}
       facets={facets}
       warnings={warnings}

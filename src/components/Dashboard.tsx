@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 
 import { AddToWantList } from "@/components/AddToWantList";
 import { CollectionsPanel } from "@/components/CollectionsPanel";
@@ -9,6 +9,7 @@ import { ResultsTable } from "@/components/ResultsTable";
 import { Tour, TourButton } from "@/components/Tour";
 import { TradesPanel } from "@/components/TradesPanel";
 import type { Owner } from "@/lib/db";
+import { useIdentity } from "@/lib/identity";
 import { money } from "@/lib/format";
 import type { SearchResponse } from "@/lib/search";
 import { TOUR_STEPS, selectorFor, type TourStep } from "@/lib/tour";
@@ -19,52 +20,6 @@ const PLACEHOLDER = `Sol Ring
 4x Lightning Bolt
 Rhystic Study
 Smothering Tithe`;
-
-const IDENTITY_KEY = "who-has-what:me";
-
-/** The remembered identity, kept in localStorage and shared across tabs. */
-const identityStore = {
-  listeners: new Set<() => void>(),
-
-  subscribe(listener: () => void) {
-    identityStore.listeners.add(listener);
-    // Another tab switching person should not leave this one out of date.
-    window.addEventListener("storage", listener);
-    return () => {
-      identityStore.listeners.delete(listener);
-      window.removeEventListener("storage", listener);
-    };
-  },
-
-  read(): string {
-    return window.localStorage.getItem(IDENTITY_KEY) ?? "";
-  },
-
-  write(id: string) {
-    if (id) window.localStorage.setItem(IDENTITY_KEY, id);
-    else window.localStorage.removeItem(IDENTITY_KEY);
-    for (const listener of identityStore.listeners) listener();
-  },
-};
-
-/**
- * Who the user is, remembered between visits.
- *
- * Both halves of the app need it — the search tab to subtract your own
- * collection, the trades tab to know whose side you are on — so it is asked
- * once, at the top, rather than separately on each tab.
- *
- * Read through `useSyncExternalStore` because that is what localStorage is:
- * the server render has nobody chosen, and the value arrives on hydration
- * without a render-then-correct flicker.
- */
-function useIdentity(owners: Owner[]): [string, (id: string) => void] {
-  const stored = useSyncExternalStore(identityStore.subscribe, identityStore.read, () => "");
-
-  // A remembered collection can be removed out from under the choice.
-  const meId = owners.some((owner) => owner.id === stored) ? stored : "";
-  return [meId, identityStore.write];
-}
 
 /**
  * Owners are rendered from server props rather than client state, so an

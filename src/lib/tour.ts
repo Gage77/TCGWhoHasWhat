@@ -58,7 +58,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: "search",
     skipIfMissing: true,
     title: "Look through what someone has",
-    body: "Browse opens a collection on its own page — every card as art or as a list, filtered by colour, type, mana value, rarity, set or price, and sorted by what it is worth. The search box there also takes Scryfall syntax, so c:u t:instant mv<=3 does what you would expect. The filter lives in the address bar, which means a filtered collection is a link you can send someone.",
+    body: "Browse opens a collection on its own page — every card as art or as a list, filtered by colour, type, mana value, rarity, set or price, and sorted by what it is worth. The search box there also takes Scryfall syntax, so c:u t:instant mv<=3 does what you would expect. Anything you find can go straight onto one of your want lists, a card at a time or the whole filtered set at once, which is what the trades tab runs on. And the filter lives in the address bar, so a filtered collection is a link you can send someone.",
   },
   {
     target: "identity",

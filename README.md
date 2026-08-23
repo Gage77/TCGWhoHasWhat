@@ -363,6 +363,30 @@ tapping a card shows the full-size image, the same preview the search results us
 A collection that has not been identified yet still lists, still searches by name, and says
 so in a line at the top with the number of cards still being worked out.
 
+### Sending cards from here to a want list
+
+This is where browsing joins back up with trading. Pick a want list once, at the top, and
+then either tap **+ Want** on a card or take the whole filtered set with **Add all N
+matching** — "everything blue they have under $5" in one press. Cards already on that list
+say **✓ Wanted** rather than offering to add them again.
+
+Wants belong to the person browsing, not to whoever owns the cards, so this needs you to
+have said who you are on the dashboard — and it is hidden entirely when you are looking at
+your own collection, where there is nothing to want.
+
+Two rules about what gets saved:
+
+- **One of each.** How many copies somebody else has says nothing about how many you want,
+  so a card is added as a single want and you can change the number in the want list editor.
+- **A tapped card keeps its printing; a bulk add does not.** You picked that tile, so the
+  version goes with it and the trades tab can tell you whether the copy on offer is the one
+  you asked for. "All their blue creatures" is a request for cards, not for particular
+  copies, so pinning printings there would only make the matcher fussier than you are.
+
+A bulk add is capped, and says how many it left out rather than quietly saving a fraction of
+what was asked for. The filter is re-run on the server rather than the browser sending up
+the cards it happens to be showing — it is only showing the first sixty.
+
 ## Filtering a collection
 
 Two things build a filter: the controls, and a text box that accepts a subset of the syntax

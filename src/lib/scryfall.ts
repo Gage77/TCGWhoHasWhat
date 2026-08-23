@@ -10,7 +10,7 @@
  */
 
 import { toCardFacts, type CardFacts } from "./cardFacts";
-import { readCache, writeCache } from "./db";
+import { readCache, writeCache, writeCardPrices } from "./db";
 import { normalizeName } from "./normalize";
 import { userAgent } from "./userAgent";
 
@@ -376,10 +376,12 @@ export async function resolveCards(
 
   const { cards, misses } = await fetchCards(pending, options);
   const toCache: Array<[string, string | null]> = [];
+  const fetched: ResolvedCard[] = [];
 
   for (const [key, card] of cards) {
     const resolvedCard = toResolvedCard(card);
     resolved.set(key, resolvedCard);
+    fetched.push(resolvedCard);
     toCache.push([key, JSON.stringify(resolvedCard)]);
   }
   for (const key of misses) {
@@ -387,6 +389,10 @@ export async function resolveCards(
   }
 
   await writeCache(toCache);
+  // Only what was actually fetched, so a search answered from cache costs no
+  // writes: a card whose price is still current has nothing to update.
+  await writeCardPrices(fetched);
+
   return resolved;
 }
 
@@ -402,20 +408,27 @@ export async function resolveCards(
 export async function fetchCardFacts(
   identifiers: CardIdentifier[],
   options: { fuzzyFallback?: boolean } = {},
-): Promise<{ facts: Map<string, CardFacts>; misses: string[] }> {
+): Promise<{ facts: Map<string, CardFacts>; prices: ResolvedCard[]; misses: string[] }> {
   const byKey = dedupe(identifiers);
   const { cards, misses } = await fetchCards([...byKey.values()], options);
 
   const facts = new Map<string, CardFacts>();
-  const prices: Array<[string, string | null]> = [];
+  const prices: ResolvedCard[] = [];
+  const toCache: Array<[string, string | null]> = [];
 
   for (const [key, card] of cards) {
     facts.set(key, toCardFacts(card));
-    prices.push([key, JSON.stringify(toResolvedCard(card))]);
+
+    const resolvedCard = toResolvedCard(card);
+    prices.push(resolvedCard);
+    toCache.push([key, JSON.stringify(resolvedCard)]);
   }
 
-  await writeCache(prices);
-  return { facts, misses };
+  await writeCache(toCache);
+
+  // Handed back rather than written here: the facts rows these prices belong
+  // to do not exist until the caller has stored them.
+  return { facts, prices, misses };
 }
 
 /**

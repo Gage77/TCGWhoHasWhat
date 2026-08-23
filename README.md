@@ -343,6 +343,62 @@ printing's price, marked `ref`. A `~` prefix means that exact finish has no list
 Tick **Only count copies marked for trade** to count just the copies flagged in each
 person's tradelist rather than everything they own.
 
+## Filtering a collection
+
+Two things build a filter: the controls, and a text box that accepts a subset of the syntax
+people already know from Scryfall. Both parse to the same tree (`src/lib/cardQuery.ts`) and
+compile to the same SQL (`src/lib/cardQuerySql.ts`), so the controls are a discoverable way
+to write a query rather than a second, subtly different filtering system.
+
+```
+c:u t:instant mv<=3          blue instants costing three or less
+id<=wu                       fits in an Azorius deck
+r>=rare usd>10               the expensive half of the rares
+t:creature (c:u or c:w)      creatures of either colour
+-t:land is:tradeable         everything but lands, and only what is on offer
+o:"draw a card" kw:flying    oracle text and keywords
+```
+
+Supported: `c`/`color`, `id`/`ci` for colour identity, `t`/`type`, `o`/`oracle`, `kw`, `r`/`rarity`,
+`s`/`e`/`set`, `a`/`artist`, `f`/`format`, `cmc`/`mv`, `pow`, `tou`, `loy`, `usd`/`price`, `year`,
+`qty`, `cond`, and `is:` for `foil`, `nonfoil`, `etched`, `tradeable`, `reserved`, `promo`,
+`identified` and `unidentified`. Comparators are `:` `=` `!=` `<` `<=` `>` `>=`; terms can be
+negated with `-`, grouped with brackets, combined with `or`, and quoted to keep spaces. Guild,
+shard and wedge names work as colours, because nobody asks what "WU" cards you have.
+
+Deliberately a subset. The long tail Scryfall supports — devotion comparisons, `is:split`,
+arbitrary set-theoretic nesting — is not worth the surface. A query using one of those says
+so in words and drops that term, keeping the rest: one typo in a long filter should not blank
+the screen or force a retype.
+
+### Why the colours are a string
+
+`card_facts.colors` holds sorted `WUBRG` letters, so `c:u` is `LIKE '%U%'`, `c=u` is `= 'U'`,
+and `id<=wu` — the Commander question — is the absence of every letter that is not W or U.
+That is the whole of colour filtering in a few comparisons, with no join table and no extra
+rows per card.
+
+Colour and colour *identity* are separate columns because they answer different questions. A
+dual land is colourless and still does not fit in a mono-red deck; filtering a Commander
+collection by colour rather than identity makes every land disappear.
+
+### Two things worth knowing
+
+**Filtering runs in the database.** A 20,000-card collection is a normal size here, and
+shipping one to a phone so the browser can hide most of it is not a plan. Every value is a
+bound parameter.
+
+**A negated filter keeps cards nobody has identified yet.** `NOT NULL` is `NULL` in SQL, so a
+naive negation drops unidentified rows out of both a filter and its opposite — cards vanish
+with nothing to explain it. Asking "is this a creature?" of a card we have not looked up
+yet is answered by "we do not know", which is not a yes. `tests/cardQuerySql.test.ts` pins
+that, along with everything else, by running the generated SQL against a real database of
+cards chosen to disagree with each other — a land that is two colours while being none, a
+foil worth ten times its ordinary printing, and a row nothing has identified.
+
+Prices filter and sort on the finish someone actually owns, so a foil Sol Ring is found by
+`usd>10` and not by `usd<2`.
+
 ## Development
 
 ```bash

@@ -18,6 +18,7 @@ import {
   linkKnownFacts,
   listPrintingsNeedingFacts,
   writeCardFacts,
+  writeCardPrices,
   type CollectionPrinting,
 } from "./db";
 import { fetchCardFacts, identifierFor, identifierKey } from "./scryfall";
@@ -94,11 +95,13 @@ export async function enrichOwner(
       else byKey.set(key, [printing]);
     }
 
-    const { facts, misses } = await fetchCardFacts(
+    const { facts, prices, misses } = await fetchCardFacts(
       pass.map((printing) => identifierFor(printing)),
     );
 
+    // Facts first: the prices are an update against the rows this creates.
     await writeCardFacts([...facts.values()]);
+    await writeCardPrices(prices);
 
     const links: Array<{ printing: CollectionPrinting; factsId: string }> = [];
     for (const [key, card] of facts) {

@@ -81,7 +81,15 @@ const TABLES = [
     edhrec_rank      INTEGER,
     reserved         INTEGER NOT NULL DEFAULT 0,
     promo            INTEGER NOT NULL DEFAULT 0,
-    fetched_at       INTEGER NOT NULL
+    fetched_at       INTEGER NOT NULL,
+    -- A denormalized copy of the price, so a collection can be sorted and
+    -- filtered by it in SQL. The card_cache table stays the authority on
+    -- freshness; these are refreshed whenever a price is fetched for a card
+    -- already here, and are simply absent until then.
+    usd              REAL,
+    usd_foil         REAL,
+    usd_etched       REAL,
+    price_updated_at INTEGER
   )`,
   // Want lists are named and there can be several per person, because a want
   // is really "for my Atraxa deck" rather than an undifferentiated pile.
@@ -132,6 +140,10 @@ const INDEXES = [
 // them back-filled. SQLite has no "ADD COLUMN IF NOT EXISTS".
 const ADDED_COLUMNS: Array<[string, string]> = [
   ["collection_cards", "facts_id TEXT"],
+  ["card_facts", "usd REAL"],
+  ["card_facts", "usd_foil REAL"],
+  ["card_facts", "usd_etched REAL"],
+  ["card_facts", "price_updated_at INTEGER"],
   ["owners", "source_url TEXT"],
   ["owners", "source_tracker TEXT"],
   ["want_cards", "list_id TEXT"],
@@ -1190,4 +1202,31 @@ export async function factsProgress(
     total: Number(row?.total ?? 0),
     identified: Number(row?.identified ?? 0),
   };
+}
+
+/**
+ * Refresh the prices kept alongside the facts.
+ *
+ * A no-op for cards nothing has identified yet, which is why this is an update
+ * rather than an upsert: `card_facts` is a record of printings we have looked
+ * up, and a price is not grounds for adding a row to it.
+ */
+export async function writeCardPrices(
+  cards: Array<{ scryfallId: string; prices: { usd: number | null; usdFoil: number | null; usdEtched: number | null } }>,
+): Promise<void> {
+  if (cards.length === 0) return;
+  const db = await getDb();
+  const now = Date.now();
+
+  const statements = cards.map((card) => ({
+    sql: `UPDATE card_facts
+          SET usd = ?, usd_foil = ?, usd_etched = ?, price_updated_at = ?
+          WHERE scryfall_id = ?`,
+    args: [card.prices.usd, card.prices.usdFoil, card.prices.usdEtched, now, card.scryfallId],
+  }));
+
+  const CHUNK = 100;
+  for (let i = 0; i < statements.length; i += CHUNK) {
+    await db.batch(statements.slice(i, i + CHUNK), "write");
+  }
 }

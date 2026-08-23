@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 
 import { describeDiff, type CollectionDiff } from "@/lib/collectionDiff";
@@ -225,6 +226,13 @@ export function CollectionsPanel({ owners, onChanged }: Props) {
                 * when one of them is Remove.
                 */}
               <div className="-mr-1 mt-1.5 flex flex-wrap justify-end gap-1">
+                <Link
+                  href={`/collections/${owner.id}`}
+                  data-tour="browse-collection"
+                  className="rounded px-2.5 py-1.5 text-xs text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                >
+                  Browse
+                </Link>
                 {!owner.sourceUrl && (
                   <button
                     onClick={() => startUpdate(owner)}

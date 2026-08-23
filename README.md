@@ -343,6 +343,26 @@ printing's price, marked `ref`. A `~` prefix means that exact finish has no list
 Tick **Only count copies marked for trade** to count just the copies flagged in each
 person's tradelist rather than everything they own.
 
+## Browsing a collection
+
+**Browse** on any collection opens it at `/collections/<id>`: every card as art or as a
+list, with what each copy is and what it is worth. Two printings of the same card are two
+tiles, because that is what the person actually has.
+
+The filter lives in the address bar. A filtered collection is therefore a link — "here is
+everything I have that fits your deck" is a thing people want to send each other — and the
+back button undoes a filter rather than leaving the page. Changing a filter re-renders on
+the server; only paging appends on the client, since nobody wants `offset=180` in their
+history.
+
+On a phone the filters are a sheet from the bottom rather than a sidebar, and it stays open
+while you use it — the count on its button updates as you tick things, so you can see a
+filter working before committing to it. Card art is unreadable at grid size on a phone, so
+tapping a card shows the full-size image, the same preview the search results use.
+
+A collection that has not been identified yet still lists, still searches by name, and says
+so in a line at the top with the number of cards still being worked out.
+
 ## Filtering a collection
 
 Two things build a filter: the controls, and a text box that accepts a subset of the syntax
@@ -398,6 +418,12 @@ foil worth ten times its ordinary printing, and a row nothing has identified.
 
 Prices filter and sort on the finish someone actually owns, so a foil Sol Ring is found by
 `usd>10` and not by `usd<2`.
+
+The controls do not filter anything themselves — they write a query in the same syntax the
+box takes, and that one query is what runs. Ticking "Creature" and typing `t:creature` do
+exactly the same thing, the two compose, and there is a single parser and a single compiler
+to be right. Groups are OR-ed inside and AND-ed between, so three rarities widens and a
+rarity plus a colour narrows.
 
 ## Development
 

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { AddToWantList } from "@/components/AddToWantList";
 import { CollectionsPanel } from "@/components/CollectionsPanel";
 import { ResultsTable } from "@/components/ResultsTable";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Tour, TourButton } from "@/components/Tour";
 import { TradesPanel } from "@/components/TradesPanel";
 import type { Owner } from "@/lib/db";
@@ -137,6 +138,7 @@ export function Dashboard({
         </div>
 
         <div className="flex shrink-0 items-center gap-1 self-start sm:self-end sm:pb-1">
+          <ThemeToggle />
           <TourButton onClick={startTour} />
 
           {gated && (

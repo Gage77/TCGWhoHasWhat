@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { AddToWantList } from "@/components/AddToWantList";
 import { CollectionsPanel } from "@/components/CollectionsPanel";
@@ -50,6 +50,8 @@ export function Dashboard({
   const [tourStep, setTourStep] = useState<number | null>(null);
   /** The steps this run will actually show, settled when the tour starts. */
   const [tourSteps, setTourSteps] = useState<TourStep[]>([]);
+  /** The search box, to scroll to when a search is started from elsewhere. */
+  const searchForm = useRef<HTMLFormElement>(null);
 
   const deckOwnerId = deckMode && meId ? meId : "";
 
@@ -83,9 +85,13 @@ export function Dashboard({
     setTourStep(next);
   }
 
-  async function search(event: React.FormEvent) {
-    event.preventDefault();
-    if (!list.trim()) return;
+  /**
+   * Takes the list as an argument rather than reading it out of state: a
+   * search started from a want list has just put that list in the box, and
+   * would otherwise search whatever was there a render ago.
+   */
+  async function runSearch(text: string) {
+    if (!text.trim()) return;
 
     setSearching(true);
     setError(null);
@@ -94,7 +100,7 @@ export function Dashboard({
       const response = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ list, deckOwnerId: deckOwnerId || undefined }),
+        body: JSON.stringify({ list: text, deckOwnerId: deckOwnerId || undefined }),
       });
       const data = await response.json();
       if (!response.ok) setError(data.error ?? "Search failed.");
@@ -104,6 +110,28 @@ export function Dashboard({
     } finally {
       setSearching(false);
     }
+  }
+
+  function search(event: React.FormEvent) {
+    event.preventDefault();
+    void runSearch(list);
+  }
+
+  /**
+   * A saved want list, run through the search.
+   *
+   * The list is left in the box afterwards rather than searched invisibly, so
+   * it can be edited into a narrower question — and so it is obvious what the
+   * results below are answering.
+   */
+  function searchWantList(text: string) {
+    setList(text);
+    setTab("search");
+    void runSearch(text);
+    // The button that started this is on the tab we just left.
+    requestAnimationFrame(() =>
+      searchForm.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   }
 
   const summary = results?.summary;
@@ -230,11 +258,13 @@ export function Dashboard({
               meId={meId}
               wantCounts={wantCounts}
               onWantsChanged={() => router.refresh()}
+              onSearchList={owners.length > 0 ? searchWantList : null}
             />
           </div>
 
           <div className={tab === "search" ? "space-y-6" : "hidden"}>
           <form
+            ref={searchForm}
             onSubmit={search}
             data-tour="search-input"
             className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 dark:border-zinc-800 dark:bg-zinc-900"

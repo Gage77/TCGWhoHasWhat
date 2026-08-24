@@ -14,9 +14,17 @@ interface Props {
   meId: string;
   wantCounts: Record<string, number>;
   onWantsChanged: () => void;
+  /** Run one of the user's want lists through the search tab. */
+  onSearchList: ((text: string) => void) | null;
 }
 
-export function TradesPanel({ owners, meId, wantCounts, onWantsChanged }: Props) {
+export function TradesPanel({
+  owners,
+  meId,
+  wantCounts,
+  onWantsChanged,
+  onSearchList,
+}: Props) {
   const [tradeableOnly, setTradeableOnly] = useState(false);
   const [report, setReport] = useState<TradeReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -88,7 +96,12 @@ export function TradesPanel({ owners, meId, wantCounts, onWantsChanged }: Props)
           data-tour="want-lists"
           className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800"
         >
-          <WantLists ownerId={meId} ownerName={me.name} onChanged={onWantsChanged} />
+          <WantLists
+            ownerId={meId}
+            ownerName={me.name}
+            onChanged={onWantsChanged}
+            onSearch={onSearchList}
+          />
         </div>
 
         {error && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>}

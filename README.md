@@ -121,6 +121,26 @@ carry a `!` badge, so the card you actually want out of a list is not buried in 
 matter (`aangs iceberg` finds `Aang's Iceberg`), and searching one face of a split or
 double-faced card finds the full printing.
 
+## Reading the results
+
+Results arrive with the cards nobody has at the top, since a list you are searching is
+usually a list of things you are trying to find. Any column heading re-orders them:
+**Card** alphabetically, **Price** by the cheapest copy in the group — the number a trade
+actually turns on — and each person's column by how many they have, which is how you find
+the one person worth driving to. Clicking the same heading again turns it round. Cards
+with no price at all sink to the bottom whichever way the column runs: they are not the
+cheapest cards on the list, they are the ones the price column has nothing to say about.
+
+The **Rows / Cards** toggle switches between the dense table and the same results as card
+art, five or six to a row, with each person's count as a chip underneath. Magic players
+recognise cards by their art far faster than by name, so a wall of art is the quickest way
+to read a list somebody else wrote. Both views expand a card to show every copy in the
+group and who holds it, and which one you prefer is remembered between visits.
+
+Sorting is a re-render rather than a round trip — a search is one request for the whole
+list, and the rows are already on the page. On a phone the sort is a dropdown instead,
+there being no column headings there to click.
+
 ## Building a deck: what am I missing?
 
 Paste a decklist, then pick yourself under **Subtract a collection first**. Cards you
@@ -177,6 +197,15 @@ six of them.
 Naming a printing on a want line — `Dockside Extortionist (C19) 86` — records which
 version you are after. Copies matching it lead the trade list and are called out; if
 nobody has that exact printing, the line says so before anyone agrees to anything.
+
+### Searching a want list
+
+**Find these** on a saved list takes it over to the **Find cards** tab, already typed in,
+and runs it. A want list is a list of cards you are looking for, which is exactly what the
+search takes — copying one into the other by hand was busywork the app was watching people
+do. The list is left in the box afterwards rather than searched invisibly, so it can be cut
+down to the four cards you actually want to ask about tonight, and so it is obvious what
+the results underneath are answering.
 
 ### Evening a trade up
 

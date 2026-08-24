@@ -8,6 +8,11 @@ interface Props {
   ownerId: string;
   ownerName: string;
   onChanged: () => void;
+  /**
+   * Take this list over to the search, already typed in. Null when there is
+   * nowhere to take it — the search needs a collection to search.
+   */
+  onSearch: ((text: string) => void) | null;
 }
 
 const PLACEHOLDER = `!Rhystic Study
@@ -39,7 +44,7 @@ function toLine(card: WantCard): string {
  * Atraxa deck" — which is also what lets a trade say why the other person
  * wants the card.
  */
-export function WantLists({ ownerId, ownerName, onChanged }: Props) {
+export function WantLists({ ownerId, ownerName, onChanged, onSearch }: Props) {
   const [lists, setLists] = useState<WantList[] | null>(null);
   const [editing, setEditing] = useState<{ id: string | null; name: string; text: string } | null>(
     null,
@@ -228,6 +233,21 @@ export function WantLists({ ownerId, ownerName, onChanged }: Props) {
                   </p>
                 </div>
                 <div className="-mr-1 flex shrink-0 gap-1">
+                  {/*
+                    * The list is already a want list; asking who has these
+                    * cards should not mean copying it into a box by hand.
+                    */}
+                  {onSearch && list.cards.length > 0 && (
+                    <button
+                      onClick={() => onSearch(list.cards.map(toLine).join("\n"))}
+                      title={`See who has the ${list.cards.length} card${
+                        list.cards.length === 1 ? "" : "s"
+                      } on ${list.name}`}
+                      className="rounded px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                    >
+                      Find these
+                    </button>
+                  )}
                   <button
                     onClick={() =>
                       setEditing({

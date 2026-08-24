@@ -117,7 +117,7 @@ export function CardPreview({ src, alt, children, className }: Props) {
           className="pointer-events-none fixed z-50 overflow-hidden rounded-xl shadow-2xl ring-1 ring-black/20"
           style={{ left: preview.left, top: preview.top, width: WIDTH, height: HEIGHT }}
         >
-          <Image src={src} alt={alt} width={WIDTH} height={HEIGHT} unoptimized priority={false} />
+          <Image src={src} alt={alt} width={WIDTH} height={HEIGHT} unoptimized />
         </span>
       )}
 

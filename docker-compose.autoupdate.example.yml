@@ -1,0 +1,29 @@
+# Copy to docker-compose.autoupdate.yml and edit machine-specific paths if needed.
+
+services:
+  tcg-who-has-what:
+    build:
+      context: .
+      dockerfile: Dockerfile.autoupdate
+    container_name: tcg-who-has-what
+    ports:
+      - "4008:3000"
+    volumes:
+      # Keep the database outside OneDrive.
+      - C:/tcg-who-has-what-data:/data
+    env_file:
+      # Keep the shared password outside the repository and OneDrive.
+      - C:/tcg-who-has-what-config/runtime.env
+    environment:
+      - NODE_ENV=production
+      - ALLOW_LOCAL_DB=1
+      - AUTH_COOKIE_SECURE=0
+      - GIT_BRANCH=main
+      - GIT_REPO_URL=https://github.com/Gage77/TCGWhoHasWhat.git
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:3000/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10m

@@ -32,6 +32,11 @@ export function publicAccessAllowed(): boolean {
   return !isProduction() || process.env.ALLOW_PUBLIC === "1";
 }
 
+/** Whether session cookies should require HTTPS for this deployment. */
+export function authCookieSecure(): boolean {
+  return process.env.AUTH_COOKIE_SECURE !== "0" && isProduction();
+}
+
 /**
  * Whether writes will land somewhere that still exists tomorrow.
  *

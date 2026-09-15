@@ -6,7 +6,7 @@ import {
   createSessionToken,
   passwordMatches,
 } from "@/lib/auth";
-import { groupPassword } from "@/lib/config";
+import { authCookieSecure, groupPassword } from "@/lib/config";
 import { clientKey, createLimiter } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -50,8 +50,7 @@ export async function POST(request: Request) {
   response.cookies.set(SESSION_COOKIE, await createSessionToken(password), {
     httpOnly: true,
     sameSite: "lax",
-    // Set over plain HTTP in development, where there is no certificate.
-    secure: process.env.NODE_ENV === "production",
+    secure: authCookieSecure(),
     path: "/",
     maxAge: MAX_AGE_SECONDS,
   });

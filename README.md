@@ -567,6 +567,63 @@ collection. Set `ALLOW_PUBLIC=1` if you genuinely mean it.
 
 Copy `.env.example` to `.env.local` to fill these in locally.
 
+### Local Docker hosting
+
+For a small private deployment on a Docker Desktop machine, use the same auto-update pattern as
+Garcon. Keep the database and runtime secret outside OneDrive, and let Tailscale/your Windows
+firewall control which friends can reach the host.
+
+Create the host folders and copy the machine-specific Compose file:
+
+```powershell
+New-Item -ItemType Directory -Force C:\tcg-who-has-what-data | Out-Null
+New-Item -ItemType Directory -Force C:\tcg-who-has-what-config | Out-Null
+Copy-Item docker-compose.autoupdate.example.yml docker-compose.autoupdate.yml
+```
+
+Create `C:\tcg-who-has-what-config\runtime.env` with the shared passphrase:
+
+```dotenv
+GROUP_PASSWORD=replace-this-with-the-shared-passphrase
+```
+
+Start or rebuild the app with:
+
+```powershell
+docker compose -f docker-compose.autoupdate.yml up -d --build
+docker compose -f docker-compose.autoupdate.yml logs -f
+```
+
+Open `http://<host-ip>:4008` from a device on the permitted Tailscale/LAN path. The Compose file
+sets `ALLOW_LOCAL_DB=1` and `AUTH_COOKIE_SECURE=0` because this private deployment uses HTTP by IP.
+Do not forward port 4008 from the router.
+
+To pull and build the latest configured branch, restart the container:
+
+```powershell
+docker restart tcg-who-has-what
+docker logs -f tcg-who-has-what
+```
+
+For a consistent manual backup, stop the container, copy the data directory, and start it again:
+
+```powershell
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$backup = "C:\tcg-who-has-what-backups\$stamp"
+New-Item -ItemType Directory -Force $backup | Out-Null
+try {
+  docker stop tcg-who-has-what
+  Copy-Item -Recurse -Force C:\tcg-who-has-what-data (Join-Path $backup 'data')
+}
+finally {
+  docker start tcg-who-has-what
+}
+```
+
+To restore, stop the container, rename the current `C:\tcg-who-has-what-data` directory instead of
+deleting it, copy the chosen backup into that path, start the container, and verify login plus a
+known collection before removing the old directory.
+
 ## Other TCGs
 
 MTG only for now. The storage and matching layers are game-agnostic; adding another game

@@ -4,11 +4,12 @@ import assert from "node:assert/strict";
 import {
   NO_DATABASE_MESSAGE,
   NO_PASSWORD_MESSAGE,
+  authCookieSecure,
   configProblem,
   persistentStorageConfigured,
 } from "../src/lib/config.ts";
 
-const KEYS = ["NODE_ENV", "GROUP_PASSWORD", "ALLOW_PUBLIC", "TURSO_DATABASE_URL", "ALLOW_LOCAL_DB"];
+const KEYS = ["NODE_ENV", "GROUP_PASSWORD", "ALLOW_PUBLIC", "TURSO_DATABASE_URL", "ALLOW_LOCAL_DB", "AUTH_COOKIE_SECURE"];
 
 /** Run `body` with exactly the given environment, then put things back. */
 function withEnv(env: Record<string, string | undefined>, body: () => void) {
@@ -74,6 +75,17 @@ test("ALLOW_LOCAL_DB is how a host with a real disk says so", () => {
     assert.equal(persistentStorageConfigured(), true);
     assert.equal(configProblem(), null);
   });
+});
+
+test("production cookies are secure unless local HTTP is explicitly configured", () => {
+  withEnv({ ...DEPLOYED }, () => assert.equal(authCookieSecure(), true));
+  withEnv({ ...DEPLOYED, AUTH_COOKIE_SECURE: "0" }, () => assert.equal(authCookieSecure(), false));
+});
+
+test("development cookies are not secure", () => {
+  withEnv({ NODE_ENV: "development", AUTH_COOKIE_SECURE: "1" }, () =>
+    assert.equal(authCookieSecure(), false),
+  );
 });
 
 test("the missing passphrase is reported before the missing database", () => {

@@ -44,3 +44,6 @@ next-env.d.ts
 
 # local collection database
 /data
+
+# Local Docker deployment (contains machine-specific paths and secrets)
+docker-compose.autoupdate.yml

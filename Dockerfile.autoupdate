@@ -1,0 +1,14 @@
+# Minimal TCG Who Has What container - clones and builds fresh on every start.
+FROM node:22-alpine
+
+RUN apk add --no-cache git
+RUN mkdir -p /app/src /data
+
+WORKDIR /app
+
+COPY scripts/entrypoint-autoupdate.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
+
+EXPOSE 3000
+
+ENTRYPOINT ["/entrypoint.sh"]

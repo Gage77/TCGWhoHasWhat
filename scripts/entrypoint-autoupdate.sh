@@ -29,15 +29,18 @@ fi
 
 cd /app/src
 
-echo "[STARTUP] Linking persistent database directory..."
-rm -rf /app/src/data
-ln -s /data /app/src/data
+echo "[STARTUP] Preparing temporary build data directory..."
+mkdir -p /app/src/data
 
 echo "[STARTUP] Installing dependencies..."
 npm ci --include=dev
 
 echo "[STARTUP] Building application..."
 npm run build
+
+echo "[STARTUP] Linking persistent database directory..."
+rm -rf /app/src/data
+ln -s /data /app/src/data
 
 echo "[STARTUP] Starting application..."
 exec ./node_modules/.bin/next start --hostname 0.0.0.0 --port 3000

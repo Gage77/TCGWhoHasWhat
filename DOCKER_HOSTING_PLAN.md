@@ -90,9 +90,8 @@ git clone --depth 1 \
 
 cd /app/src
 
-echo "[STARTUP] Linking persistent database directory..."
-rm -rf /app/src/data
-ln -s /data /app/src/data
+echo "[STARTUP] Preparing temporary build data directory..."
+mkdir -p /app/src/data
 
 echo "[STARTUP] Installing dependencies..."
 npm ci --include=dev
@@ -100,13 +99,18 @@ npm ci --include=dev
 echo "[STARTUP] Building application..."
 npm run build
 
+echo "[STARTUP] Linking persistent database directory..."
+rm -rf /app/src/data
+ln -s /data /app/src/data
+
 echo "[STARTUP] Starting application..."
 exec ./node_modules/.bin/next start --hostname 0.0.0.0 --port 3000
 ```
 
-The application already creates and migrates `data/collections.db` on first use. The symlink keeps
-that existing application behavior while placing the real database in the host-mounted `/data`
-directory.
+The build gets a normal temporary `data` directory because Next.js/Turbopack cannot compile a
+database symlink that points outside the project. After the build, the symlink places the real
+runtime database in the host-mounted `/data` directory. The application already creates and
+migrates `data/collections.db` on first use.
 
 The script intentionally tracks a branch rather than implementing a release manager. If `main`
 is broken, revert/fix it and restart the container. Logs must clearly show whether clone, install,

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Who Has What",
+  title: "TCGWHW - Find Your Friend's Cards",
   description: "Compare your playgroup's Magic collections and find who has the cards you need.",
 };
 

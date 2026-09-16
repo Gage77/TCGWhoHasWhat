@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env*
+node_modules
+.next
+out
+coverage
+data
+DOCKER_HOSTING_PLAN.md
+README.md
+tests
+samples
+*.log

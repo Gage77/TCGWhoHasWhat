@@ -13,7 +13,7 @@ import { configProblem, groupPassword } from "@/lib/config";
 
 export const config = {
   // Everything except the static assets a login page still needs to render.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon).*)"],
 };
 
 /** Routes that have to stay reachable to get through the gate at all. */
